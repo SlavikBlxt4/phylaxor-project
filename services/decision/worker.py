@@ -1,0 +1,88 @@
+import os, json, time, redis, requests, psycopg2
+from psycopg2.extras import Json
+from rules import rule_for
+
+REDIS_HOST = os.getenv("REDIS_HOST","redis")
+PG_DSN = os.getenv("PG_DSN","dbname=phylaxor user=postgres password=postgres host=postgres")
+NOTIFIER_URL = os.getenv("NOTIFIER_URL","http://notifier:8082/send")
+
+r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
+
+def pg():
+    return psycopg2.connect(PG_DSN)
+
+def store_alert(cur, evt):
+    cur.execute("""insert into alerts(fingerprint,alertname,labels,starts_at,status)
+                   values(%s,%s,%s,%s,%s) returning id""",
+                (evt.get("fingerprint"),
+                 evt.get("alertname"),
+                 Json(evt.get("labels",{})),
+                 evt.get("startsAt"),
+                 evt.get("status","firing")))
+    return cur.fetchone()[0]
+
+def store_decision(cur, alert_id, path, rule_id, context, rec, latency_ms):
+    cur.execute("""insert into decisions(alert_id,path,rule_id,context,recommendation,latency_ms)
+                   values(%s,%s,%s,%s,%s,%s) returning id""",
+                (alert_id, path, rule_id, Json(context or {}), Json(rec or {}), latency_ms))
+    return cur.fetchone()[0]
+
+def format_msg(evt, rec):
+    parts = [f"[{evt.get('alertname')}] {rec.get('summary','')}", "Checks:"]
+    parts += [f"- {c}" for c in rec.get("checks",[])[:5]]
+    parts += ["Fixes:"]
+    parts += [f"- {f}" for f in rec.get("fixes",[])[:5]]
+    return "\n".join(parts)
+
+def main():
+    while True:
+        item = r.brpop("phylaxor_enriched", timeout=5)
+        if not item:
+            continue
+        _, payload = item
+        evt = json.loads(payload)
+        t0 = time.time()
+
+        # guarda alerta
+        with pg() as conn:
+            with conn.cursor() as cur:
+                alert_id = store_alert(cur, evt)
+
+        # aplica reglas
+        rule = rule_for(evt)
+        if rule:
+            rec = {
+              "summary": rule["summary"],
+              "checks": rule["checks"],
+              "hypotheses": [],
+              "fixes": rule["fixes"]
+            }
+            latency = int((time.time()-t0)*1000)
+            with pg() as conn:
+                with conn.cursor() as cur:
+                    decision_id = store_decision(cur, alert_id, "rule", rule["rule_id"], evt.get("context"), rec, latency)
+            # notifica
+            try:
+                requests.post(NOTIFIER_URL, json={"decision_id": decision_id, "text": format_msg(evt, rec)}, timeout=5)
+            except Exception as e:
+                print("Notifier error:", e)
+            continue
+
+        # si no hay regla aún, de momento avisamos con un mensaje genérico (IA llegará luego)
+        rec = {
+          "summary": "No matching rule. AI path not implemented yet.",
+          "checks": ["kubectl get events -A | tail -n 50"],
+          "hypotheses": [],
+          "fixes": ["Add rule or enable Brain Gateway"]
+        }
+        latency = int((time.time()-t0)*1000)
+        with pg() as conn:
+            with conn.cursor() as cur:
+                decision_id = store_decision(cur, alert_id, "rule", "no_rule_placeholder", evt.get("context"), rec, latency)
+        try:
+            requests.post(NOTIFIER_URL, json={"decision_id": decision_id, "text": format_msg(evt, rec)}, timeout=5)
+        except Exception as e:
+            print("Notifier error:", e)
+
+if __name__ == "__main__":
+    main()

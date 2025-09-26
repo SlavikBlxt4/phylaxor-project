@@ -1,0 +1,42 @@
+version: "3.9"
+services:
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: phylaxor
+    ports: ["5432:5432"]
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:z
+
+  ingest:
+    build: ./services/ingest
+    environment:
+      REDIS_HOST: redis
+    ports: ["8080:8080"]
+    depends_on: [redis]
+
+  enricher:
+    build: ./services/enricher
+    environment:
+      REDIS_HOST: redis
+    depends_on: [redis]
+
+  notifier:
+    build: ./services/notifier
+    environment:
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+    ports: ["8082:8082"]
+
+  decision:
+    build: ./services/decision
+    environment:
+      REDIS_HOST: redis
+      PG_DSN: postgresql://postgres:postgres@postgres:5432/phylaxor
+      NOTIFIER_URL: http://notifier:8082/send
+    depends_on: [redis, postgres, notifier]
