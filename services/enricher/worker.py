@@ -20,8 +20,8 @@ try:
 except Exception as e:
     CTX = {"platform": "k8s", "context": "unknown", "error": str(e)}
 
-RHOST = os.getenv("REDIS_HOST", "redis")
-RPORT = int(os.getenv("REDIS_PORT", "6379"))
+RHOST = os.getenv("REDIS_SERVICE_HOST", os.getenv("REDIS_HOST", "redis"))
+RPORT = int(os.getenv("REDIS_SERVICE_PORT", "6379"))
 r = redis.Redis(host=RHOST, port=RPORT, db=0)
 
 _running = True
