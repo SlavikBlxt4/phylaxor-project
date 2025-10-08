@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  annotations:
+    prometheus-operator-validated: 'true'
+  labels:
+    release: monitoring
+  name: phylaxor-test-2
+  namespace: monitoring
+spec:
+  groups:
+    - name: phylaxor-test.rules
+      rules:
+        - alert: PhylaxorTestAlert2
+          annotations:
+            description: This is a test alert for validating the webhook flow.
+            summary: Phylaxor test alert
+          expr: vector(1)
+          for: 10s
+          labels:
+            namespace: monitoring
+            severity: info
