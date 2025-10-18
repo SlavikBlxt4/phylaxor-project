@@ -1,0 +1,12 @@
+project: default
+source:
+  repoURL: https://github.com/SlavikBlxt4/phylaxor-gitops.git
+  path: apps/phylaxor
+  targetRevision: HEAD
+destination:
+  server: https://kubernetes.default.svc
+  namespace: phylaxor
+syncPolicy:
+  automated:
+    enabled: true
+
