@@ -9,4 +9,5 @@ destination:
 syncPolicy:
   automated:
     enabled: true
-
+syncOptions:
+  - CreateNamespace=true
