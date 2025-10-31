@@ -1,0 +1,78 @@
+name: Build & Update GitOps
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  detect-build-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Determine changed services
+      id: changed
+      run: |
+        echo "CHANGED_SERVICES=$(git diff --name-only HEAD~1 HEAD | grep '^services/' | cut -d/ -f2 | sort -u)" >> $GITHUB_ENV
+        echo "Detected changed services: $CHANGED_SERVICES"
+
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set GitOps repo credentials
+      run: |
+        git config --global user.email "ci@github.com"
+        git.config --global user.name "GitHub Actions"
+
+    - name: Clone GitOps repo
+      run: |
+        git clone https://github.com/SlavikBlxt4/phylaxor-gitops.git
+
+    - name: Process services
+      run: |
+        for service in $CHANGED_SERVICES; do
+          IMAGE_NAME="ghcr.io/slavikblxt4/phylaxor-$service"
+          VERSION=$(date +%Y.%m.%d-%H%M%S)  # Version auto incremental por timestamp
+          
+          echo "=== Building $service ==="
+          docker build -t $IMAGE_NAME:$VERSION ./services/$service
+          docker push $IMAGE_NAME:$VERSION
+
+          echo "=== Updating GitOps values.yaml ==="
+          cd phylaxor-gitops
+          sed -i "s|tag: \".*\" # $service|tag: \"$VERSION\" # $service|" apps/phylaxor/values.yaml
+
+          cd ..
+
+        done
+
+    - name: Commit & Push update
+      if: env.CHANGED_SERVICES != ''
+      run: |
+        cd phylaxor-gitops
+        BRANCH="auto/update-$(date +%s)"
+        git checkout -b $BRANCH
+        git add apps/phylaxor/values.yaml
+        git commit -m "Auto update of images: $CHANGED_SERVICES"
+        git push https://x-access-token:${{ secrets.GH_GITOPS_TOKEN }}@github.com/SlavikBlxt4/phylaxor-gitops.git $BRANCH
+
+    - name: Create Pull Request
+      if: env.CHANGED_SERVICES != ''
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GH_GITOPS_TOKEN }}
+        repository: SlavikBlxt4/phylaxor-gitops
+        branch: auto/update-${{ github.run_id }}
+        title: "[CI] Update images for: ${{ env.CHANGED_SERVICES }}"
+        body: |
+          Este PR fue generado automáticamente porque detectamos cambios en:
+          **${{ env.CHANGED_SERVICES }}**
