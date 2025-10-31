@@ -31,7 +31,7 @@ jobs:
     - name: Set GitOps repo credentials
       run: |
         git config --global user.email "ci@github.com"
-        git.config --global user.name "GitHub Actions"
+        git config --global user.name "GitHub Actions"
 
     - name: Clone GitOps repo
       run: |
