@@ -11,6 +11,66 @@ r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
 def pg():
     return psycopg2.connect(PG_DSN)
 
+
+def previous_decision(evt):
+    fp  = evt.get("fingerprint")
+    name = evt.get("alertname")
+    pod  = evt.get("labels",{}).get("pod","")
+
+    with pg() as conn:
+        with conn.cursor() as cur:
+            # 1) fingerprint exacto
+            if fp:
+                cur.execute("""
+                    SELECT d.recommendation
+                    FROM decisions d
+                    JOIN alerts a ON a.id = d.alert_id
+                    WHERE a.fingerprint = %s
+                    ORDER BY d.id DESC
+                    LIMIT 1;
+                """, (fp,))
+                row = cur.fetchone()
+                if row: return row[0]
+
+            # 2) alertname + namespace + pod
+            cur.execute("""
+                SELECT d.recommendation
+                FROM decisions d
+                JOIN alerts a ON a.id = d.alert_id
+                WHERE a.alertname = %s
+                  AND a.labels->>'namespace' = %s
+                  AND a.labels->>'pod' = %s
+                ORDER BY d.id DESC
+                LIMIT 1;
+            """, (name, ns, pod))
+            row = cur.fetchone()
+            if row: return row[0]
+
+            # 3) alertname + namespace
+            cur.execute("""
+                SELECT d.recommendation
+                FROM decisions d
+                JOIN alerts a ON a.id = d.alert_id
+                WHERE a.alertname = %s
+                  AND a.labels->>'namespace' = %s
+                ORDER BY d.id DESC
+                LIMIT 1;
+            """, (name, ns))
+            row = cur.fetchone()
+            if row: return row[0]
+
+            # 4) alertname solo
+            cur.execute("""
+                SELECT d.recommendation
+                FROM decisions d
+                JOIN alerts a ON a.id = d.alert_id
+                WHERE a.alertname = %s
+                ORDER BY d.id DESC
+                LIMIT 1;
+            """, (name,))
+            row = cur.fetchone()
+            return row[0] if row else None
+
 def store_alert(cur, evt):
     cur.execute("""insert into alerts(fingerprint,alertname,labels,starts_at,status)
                    values(%s,%s,%s,%s,%s) returning id""",
@@ -47,6 +107,8 @@ def main():
         with pg() as conn:
             with conn.cursor() as cur:
                 alert_id = store_alert(cur, evt)
+
+        t0 = time.time()
 
         # aplica reglas
         rule = rule_for(evt)
