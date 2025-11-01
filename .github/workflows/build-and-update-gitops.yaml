@@ -58,7 +58,7 @@ jobs:
       run: |
         set -euo pipefail
         for service in $CHANGED_SERVICES; do
-          IMAGE="ghcr.io/${{ github.repository_owner }}/phylaxor-$service"
+          IMAGE="ghcr.io/slavikblxt4/phylaxor-$service"
           # Tag único y estable por run
           VERSION="r${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
           echo "▶ Building $service -> $IMAGE:$VERSION"
@@ -125,3 +125,4 @@ jobs:
           automated
           phylaxor
         delete-branch: true
+
