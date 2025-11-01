@@ -3,13 +3,18 @@ name: Build & Update GitOps
 on:
   push:
     branches: ["main"]
+    paths:
+      - "services/**"
+      - ".github/workflows/build-and-update-gitops.yml"
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
 
 jobs:
   build-update:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
 
     steps:
     - name: Checkout app repo (full history)
@@ -21,29 +26,20 @@ jobs:
       id: detect
       run: |
         set -euo pipefail
-
         BASE_SHA="${{ github.event.before }}"
         HEAD_SHA="${{ github.sha }}"
 
+        # Fallback para commits iniciales
         if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-          CHANGED_FILES=$(git ls-files 'services/*/*.py')
-        else
-          git fetch --depth=1 origin "$BASE_SHA" || true
-          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 'services/*/*.py')
+          BASE_SHA="$(git rev-parse HEAD~1 || true)"
         fi
 
-        SERVICES=$(printf '%s\n' "$CHANGED_FILES" | awk -F/ 'NF>=3 {print $2}' | sort -u | tr '\n' ' ' | xargs)
+        CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 'services/**' || true)
+        SERVICES=$(printf '%s\n' "$CHANGED_FILES" | awk -F/ 'NF>=2 {print $2}' | sort -u | xargs)
 
-        if [ -z "${SERVICES:-}" ]; then
-          echo "CHANGED_SERVICES=" >> "$GITHUB_ENV"
-          echo "CHANGED_SERVICES_CSV=" >> "$GITHUB_ENV"
-          echo "No Python service changes detected."
-          exit 0
-        fi
-
-        echo "CHANGED_SERVICES=$SERVICES" >> "$GITHUB_ENV"
-        echo "CHANGED_SERVICES_CSV=$(echo "$SERVICES" | tr ' ' ',')" >> "$GITHUB_ENV"
-        echo "SERVICES CHANGED: $SERVICES"
+        echo "SERVICES: ${SERVICES:-<none>}"
+        echo "CHANGED_SERVICES=${SERVICES:-}" >> "$GITHUB_ENV"
+        echo "CHANGED_SERVICES_CSV=$(echo "${SERVICES:-}" | tr ' ' ',' )" >> "$GITHUB_ENV"
 
     - name: Stop if nothing changed
       if: env.CHANGED_SERVICES == ''
@@ -52,80 +48,80 @@ jobs:
         exit 0
 
     - name: Login to GHCR
-      if: env.CHANGED_SERVICES != ''
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
-        username: SlavikBlxt4
-        password: ${{ secrets.GHCR_PAT }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build & push images
+      run: |
+        set -euo pipefail
+        for service in $CHANGED_SERVICES; do
+          IMAGE="ghcr.io/${{ github.repository_owner }}/phylaxor-$service"
+          # Tag único y estable por run
+          VERSION="r${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
+          echo "▶ Building $service -> $IMAGE:$VERSION"
+          docker build -t "$IMAGE:$VERSION" "./services/$service"
+          docker push "$IMAGE:$VERSION"
+          # Guardamos par servicio/tag para usar luego
+          echo "$service=$VERSION" >> image_tags.txt
+        done
+      shell: bash
 
     - name: Checkout GitOps repo
-      if: env.CHANGED_SERVICES != ''
       uses: actions/checkout@v4
       with:
         repository: SlavikBlxt4/phylaxor-gitops
         token: ${{ secrets.GH_GITOPS_TOKEN }}
         path: gitops
         ref: main
+        fetch-depth: 0
 
-    - name: Install yq
-      if: env.CHANGED_SERVICES != ''
+    - name: Install yq (v4)
       run: |
-        curl -sL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" \
-        -o /usr/local/bin/yq
+        curl -sL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq
         chmod +x /usr/local/bin/yq
 
-    - name: Build images and update values.yaml
-      if: env.CHANGED_SERVICES != ''
+    - name: Update values.yaml (dynamic key)
+      id: update
+      env:
+        VALUES_FILE: gitops/apps/phylaxor/values.yaml
       run: |
         set -euo pipefail
+        echo "Will update $(pwd)/$VALUES_FILE"
+        while IFS='=' read -r service VERSION; do
+          [ -z "$service" ] && continue
+          echo "▶ Updating $service to tag $VERSION"
+          # CLAVE CORRECTA EN YQ v4:
+          yq -i '.images[env(service)].tag = strenv(VERSION)' "$VALUES_FILE"
+        done < image_tags.txt
 
-        for service in $CHANGED_SERVICES; do
-          IMAGE="ghcr.io/slavikblxt4/phylaxor-$service"
-          VERSION=$(date +%Y.%m.%d-%H%M%S)
-
-          echo "▶ Building $service -> $IMAGE:$VERSION"
-          docker build -t "$IMAGE:$VERSION" "./services/$service"
-          docker push "$IMAGE:$VERSION"
-
-          echo "▶ Updating values.yaml for $service"
-          yq -i ".images.$service.tag = \"$VERSION\"" gitops/apps/phylaxor/values.yaml
-        done
-
-        # show diff
         echo "========= DIFF in values.yaml ========="
         git -C gitops diff --color=always apps/phylaxor/values.yaml || true
 
-        # Check if file actually changed
-        if git -C gitops diff --quiet apps/phylaxor/values.yaml; then
-          echo "⚠ values.yaml did not actually change. Exiting to avoid empty PR."
-          exit 0
+        # Señalizamos si hay cambios reales
+        if git -C gitops diff --quiet --exit-code apps/phylaxor/values.yaml; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
         fi
 
-        echo "BRANCH=auto/update-$(date +%s)" >> $GITHUB_ENV
-
-    - name: Commit and push changes
-      if: env.BRANCH != ''
-      run: |
-        cd gitops
-        git config user.email "ci@github.com"
-        git config user.name "GitHub Actions"
-        git checkout -b "$BRANCH"
-        git add apps/phylaxor/values.yaml
-        git commit -m "Update images: $CHANGED_SERVICES"
-        git push origin "$BRANCH"
-
     - name: Create Pull Request
-      if: env.BRANCH != ''
+      if: steps.update.outputs.changed == 'true'
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GH_GITOPS_TOKEN }}
         path: gitops
-        branch: ${{ env.BRANCH }}
-        base: main
+        commit-message: "chore(gitops): update image tags for: ${{ env.CHANGED_SERVICES_CSV }}"
         title: "[CI] Update images for: ${{ env.CHANGED_SERVICES_CSV }}"
         body: |
           PR automático.
           Servicios cambiados:
           **${{ env.CHANGED_SERVICES }}**
-
+        branch: ci/update-images-${{ github.run_id }}
+        base: main
+        labels: |
+          automated
+          phylaxor
+        delete-branch: true
