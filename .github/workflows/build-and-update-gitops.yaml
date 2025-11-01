@@ -90,9 +90,8 @@ jobs:
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GH_GITOPS_TOKEN }}
-        repository: SlavikBlxt4/phylaxor-gitops
-        branch: ${{ env.BRANCH }}
         base: main
+        branch: ${{ env.BRANCH }}
         title: "[CI] Update images for: ${{ env.CHANGED_SERVICES }}"
         body: |
           PR generado automáticamente por CI.
