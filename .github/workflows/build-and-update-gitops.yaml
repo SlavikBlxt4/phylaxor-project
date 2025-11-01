@@ -5,94 +5,103 @@ on:
     branches: ["main"]
 
 jobs:
-  detect-build-update:
+  build-update:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-    - name: Checkout code (full history)
+    - name: Checkout app repo (full history)
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: Determine changed services
-      id: changed
+    - name: Detect changed microservices
       run: |
-        set -e
         BASE_SHA="${{ github.event.before }}"
         HEAD_SHA="${{ github.sha }}"
         if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-          CHANGED=$(git ls-files 'services/*' | cut -d/ -f2 | sort -u)
+          CHANGED=$(git ls-files "services/*" | cut -d/ -f2 | sort -u)
         else
-          git fetch --no-tags --prune --depth=50 origin $BASE_SHA || true
-          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 'services/*' | cut -d/ -f2 | sort -u)
+          git fetch origin $BASE_SHA || true
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" "services/*" | cut -d/ -f2 | sort -u)
         fi
         echo "CHANGED_SERVICES=$CHANGED" >> $GITHUB_ENV
-        echo "Changed services: $CHANGED"
+        echo "SERVICES CHANGED: $CHANGED"
 
-    - name: Login to GHCR (with PAT)
-      if: env.CHANGED_SERVICES != ''
+    - name: Stop if nothing changed
+      if: env.CHANGED_SERVICES == ''
+      run: |
+        echo "No changed services. Exiting."
+        exit 0
+
+    - name: Login to GHCR
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: SlavikBlxt4
         password: ${{ secrets.GHCR_PAT }}
 
-    - name: Set Git identity
-      run: |
-        git config --global user.email "ci@github.com"
-        git config --global user.name "GitHub Actions"
-
-    # ✅ Checkout del repo GitOps dentro de ./gitops (más robusto que git clone)
     - name: Checkout GitOps repo
-      if: env.CHANGED_SERVICES != ''
       uses: actions/checkout@v4
       with:
         repository: SlavikBlxt4/phylaxor-gitops
         token: ${{ secrets.GH_GITOPS_TOKEN }}
         path: gitops
         ref: main
-        persist-credentials: true
 
-    - name: Build & Push images + Update values.yaml
-      if: env.CHANGED_SERVICES != ''
+    - name: Install yq
       run: |
-        set -e
+        curl -sL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" \
+        -o /usr/local/bin/yq
+        chmod +x /usr/local/bin/yq
+
+    - name: Build images and update values.yaml
+      run: |
         for service in $CHANGED_SERVICES; do
-          IMAGE_NAME="ghcr.io/slavikblxt4/phylaxor-$service"
+          IMAGE="ghcr.io/slavikblxt4/phylaxor-$service"
           VERSION=$(date +%Y.%m.%d-%H%M%S)
 
-          echo "=== Building $service as $IMAGE_NAME:$VERSION ==="
-          docker build -t $IMAGE_NAME:$VERSION "./services/$service"
-          docker push $IMAGE_NAME:$VERSION
+          echo "▶ Building $service -> $IMAGE:$VERSION"
+          docker build -t "$IMAGE:$VERSION" "./services/$service"
+          docker push "$IMAGE:$VERSION"
 
-          echo "=== Updating tag in GitOps values.yaml for $service ==="
-          sed -i "s|tag: \".*\" # $service|tag: \"$VERSION\" # $service|" gitops/apps/phylaxor/values.yaml
+          echo "▶ Updating values.yaml for $service"
+          yq -i ".images.$service.tag = \"$VERSION\"" gitops/apps/phylaxor/values.yaml
         done
+
+        # show diff
+        echo "========= DIFF in values.yaml ========="
+        git -C gitops diff --color=always apps/phylaxor/values.yaml || true
+
+        # Check if file actually changed
+        if git -C gitops diff --quiet apps/phylaxor/values.yaml; then
+          echo "⚠ values.yaml did not actually change. Exiting to avoid empty PR."
+          exit 0
+        fi
+
         echo "BRANCH=auto/update-$(date +%s)" >> $GITHUB_ENV
 
-    - name: Commit & Push update branch (GitOps)
-      if: env.CHANGED_SERVICES != ''
-      working-directory: gitops
+    - name: Commit and push changes
       run: |
-        set -e
-        git checkout -b "${BRANCH}"
+        cd gitops
+        git config user.email "ci@github.com"
+        git config user.name "GitHub Actions"
+        git checkout -b "$BRANCH"
         git add apps/phylaxor/values.yaml
-        git commit -m "Auto update of images: ${CHANGED_SERVICES}"
-        git push origin "${BRANCH}"
+        git commit -m "Update images: $CHANGED_SERVICES"
+        git push origin "$BRANCH"
 
-    - name: Create Pull Request in GitOps repo
-      if: env.CHANGED_SERVICES != ''
+    - name: Create Pull Request
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GH_GITOPS_TOKEN }}
-        path: gitops                 # 👈 ahora seguro existe
+        path: gitops
         branch: ${{ env.BRANCH }}
         base: main
         title: "[CI] Update images for: ${{ env.CHANGED_SERVICES }}"
         body: |
-          PR generado automáticamente.
-          Servicios modificados:
+          PR automático.
+          Servicios cambiados:
           **${{ env.CHANGED_SERVICES }}**
