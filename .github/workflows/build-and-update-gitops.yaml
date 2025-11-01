@@ -90,22 +90,25 @@ jobs:
       run: |
         set -euo pipefail
         echo "Will update $(pwd)/$VALUES_FILE"
-        while IFS='=' read -r service VERSION; do
-          [ -z "$service" ] && continue
-          echo "▶ Updating $service to tag $VERSION"
-          # CLAVE CORRECTA EN YQ v4:
-          yq -i '.images[env(service)].tag = strenv(VERSION)' "$VALUES_FILE"
+        
+        while IFS='=' read -r svc tag; do
+          [ -z "${svc:-}" ] && continue
+          echo "▶ Updating ${svc} to tag ${tag}"
+          # Pasamos variables como ENV a yq:
+          SERVICE="$svc" VERSION="$tag" \
+            yq -i '.images[env(SERVICE)].tag = strenv(VERSION)' "$VALUES_FILE"
         done < image_tags.txt
-
+        
         echo "========= DIFF in values.yaml ========="
         git -C gitops diff --color=always apps/phylaxor/values.yaml || true
-
+        
         # Señalizamos si hay cambios reales
         if git -C gitops diff --quiet --exit-code apps/phylaxor/values.yaml; then
           echo "changed=false" >> "$GITHUB_OUTPUT"
         else
           echo "changed=true" >> "$GITHUB_OUTPUT"
         fi
+
 
     - name: Create Pull Request
       if: steps.update.outputs.changed == 'true'
@@ -125,5 +128,6 @@ jobs:
           automated
           phylaxor
         delete-branch: true
+
 
 
