@@ -80,9 +80,6 @@ jobs:
       run: |
         set -euo pipefail
 
-        UPDATED_LIST=""
-        UPDATED_TABLE=""
-
         for service in $CHANGED_SERVICES; do
           IMAGE="ghcr.io/slavikblxt4/phylaxor-$service"
           VERSION=$(date +%Y.%m.%d-%H%M%S)
@@ -93,9 +90,6 @@ jobs:
 
           echo "▶ Updating values.yaml for $service"
           yq -i ".images.$service.tag = \"$VERSION\"" gitops/apps/phylaxor/values.yaml
-
-          UPDATED_LIST+="$service:$VERSION "
-          UPDATED_TABLE+="- **$service** → \\\`$VERSION\\\`\n"
         done
 
         # show diff
@@ -108,15 +102,7 @@ jobs:
           exit 0
         fi
 
-        UPDATED_LIST=$(printf '%s' "$UPDATED_LIST" | sed 's/[[:space:]]*$//')
-
         echo "BRANCH=auto/update-$(date +%s)" >> $GITHUB_ENV
-        echo "UPDATED_LIST=$UPDATED_LIST" >> $GITHUB_ENV
-        {
-          echo "UPDATED_TABLE<<'EOF'"
-          printf '%s' "$UPDATED_TABLE"
-          echo "EOF"
-        } >> "$GITHUB_ENV"
 
     - name: Commit and push changes
       if: env.BRANCH != ''
@@ -141,7 +127,4 @@ jobs:
         body: |
           PR automático.
           Servicios cambiados:
-
-          ${{ env.UPDATED_TABLE }}
-
-          Tags: ${{ env.UPDATED_LIST }}
+          **${{ env.CHANGED_SERVICES }}**
