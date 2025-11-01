@@ -85,15 +85,18 @@ jobs:
         git commit -m "Auto update of images: ${CHANGED_SERVICES}"
         git push "https://x-access-token:${GITOPS_TOKEN}@github.com/SlavikBlxt4/phylaxor-gitops.git" "${BRANCH}"
 
-    - name: Create Pull Request
+    - name: Create Pull Request in GitOps repo
       if: env.CHANGED_SERVICES != ''
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GH_GITOPS_TOKEN }}
-        base: main
+        path: gitops
         branch: ${{ env.BRANCH }}
+        base: main
         title: "[CI] Update images for: ${{ env.CHANGED_SERVICES }}"
         body: |
-          PR generado automáticamente por CI.
-          Servicios cambiados:
+          PR generado automáticamente.
+          Servicios modificados:
           **${{ env.CHANGED_SERVICES }}**
+
+
