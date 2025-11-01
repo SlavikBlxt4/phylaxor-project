@@ -10,7 +10,7 @@ r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
 
 def pg():
     return psycopg2.connect(PG_DSN)
-# prueba pipeline 3
+# prueba pipeline 4
 
 def previous_decision(evt):
     fp  = evt.get("fingerprint")
