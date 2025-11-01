@@ -8,9 +8,8 @@ jobs:
   detect-build-update:
     runs-on: ubuntu-latest
     permissions:
-      contents: write        # para operar en el repo actual
-      pull-requests: write   # para crear PRs si fuera en este repo (no imprescindible aquí)
-      # packages: write      # ya no es necesario si usas GHCR_PAT; puedes dejarlo o quitarlo
+      contents: write
+      pull-requests: write
 
     steps:
     - name: Checkout code (full history)
@@ -46,12 +45,16 @@ jobs:
         git config --global user.email "ci@github.com"
         git config --global user.name "GitHub Actions"
 
-    - name: Clone GitOps repo
+    # ✅ Checkout del repo GitOps dentro de ./gitops (más robusto que git clone)
+    - name: Checkout GitOps repo
       if: env.CHANGED_SERVICES != ''
-      env:
-        GITOPS_TOKEN: ${{ secrets.GH_GITOPS_TOKEN }}
-      run: |
-        git clone "https://x-access-token:${GITOPS_TOKEN}@github.com/SlavikBlxt4/phylaxor-gitops.git"
+      uses: actions/checkout@v4
+      with:
+        repository: SlavikBlxt4/phylaxor-gitops
+        token: ${{ secrets.GH_GITOPS_TOKEN }}
+        path: gitops
+        ref: main
+        persist-credentials: true
 
     - name: Build & Push images + Update values.yaml
       if: env.CHANGED_SERVICES != ''
@@ -66,31 +69,26 @@ jobs:
           docker push $IMAGE_NAME:$VERSION
 
           echo "=== Updating tag in GitOps values.yaml for $service ==="
-          cd phylaxor-gitops
-          # Requiere comentario marcador en values.yaml:  tag: "..." # $service
-          sed -i "s|tag: \".*\" # $service|tag: \"$VERSION\" # $service|" apps/phylaxor/values.yaml
-          cd -
+          sed -i "s|tag: \".*\" # $service|tag: \"$VERSION\" # $service|" gitops/apps/phylaxor/values.yaml
         done
         echo "BRANCH=auto/update-$(date +%s)" >> $GITHUB_ENV
 
-    - name: Commit & Push update branch
+    - name: Commit & Push update branch (GitOps)
       if: env.CHANGED_SERVICES != ''
-      env:
-        GITOPS_TOKEN: ${{ secrets.GH_GITOPS_TOKEN }}
+      working-directory: gitops
       run: |
         set -e
-        cd phylaxor-gitops
         git checkout -b "${BRANCH}"
         git add apps/phylaxor/values.yaml
         git commit -m "Auto update of images: ${CHANGED_SERVICES}"
-        git push "https://x-access-token:${GITOPS_TOKEN}@github.com/SlavikBlxt4/phylaxor-gitops.git" "${BRANCH}"
+        git push origin "${BRANCH}"
 
     - name: Create Pull Request in GitOps repo
       if: env.CHANGED_SERVICES != ''
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ secrets.GH_GITOPS_TOKEN }}
-        path: gitops
+        path: gitops                 # 👈 ahora seguro existe
         branch: ${{ env.BRANCH }}
         base: main
         title: "[CI] Update images for: ${{ env.CHANGED_SERVICES }}"
@@ -98,5 +96,3 @@ jobs:
           PR generado automáticamente.
           Servicios modificados:
           **${{ env.CHANGED_SERVICES }}**
-
-
