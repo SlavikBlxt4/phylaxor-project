@@ -1,5 +1,5 @@
 FROM python:3.11-slim
-WORKDIR /app
+WORKDIR .
 
 RUN pip install fastapi uvicorn psycopg2-binary
 
