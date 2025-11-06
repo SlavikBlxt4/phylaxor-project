@@ -5,4 +5,4 @@ RUN pip install fastapi uvicorn psycopg2-binary
 
 COPY . .
 
-CMD ["uvicorn", "/app/worker.py", "--host", "0.0.0.0", "--port", "8083"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8083"]
