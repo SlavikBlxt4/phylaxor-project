@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 WORKDIR /app
 
-RUN pip install fastapi uvicorn psycopg2-binary
+RUN pip install fastapi uvicorn psycopg2-binary jinja2 python-multipart
 
 COPY . .
 

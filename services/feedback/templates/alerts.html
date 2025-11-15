@@ -1,0 +1,15 @@
+<h2>Alerts</h2>
+<table border="1">
+<tr>
+    <th>ID</th><th>Name</th><th>Fingerprint</th><th>Start</th><th>Status</th>
+</tr>
+{% for a in alerts %}
+<tr>
+    <td>{{ a[0] }}</td>
+    <td>{{ a[1] }}</td>
+    <td>{{ a[2] }}</td>
+    <td>{{ a[3] }}</td>
+    <td>{{ a[4] }}</td>
+</tr>
+{% endfor %}
+</table>

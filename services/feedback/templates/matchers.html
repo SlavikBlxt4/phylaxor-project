@@ -1,0 +1,16 @@
+<h2>KB Matchers</h2>
+<table border="1">
+<tr>
+    <th>ID</th><th>KB ID</th><th>Kind</th><th>Field</th><th>Operator</th><th>Value</th>
+</tr>
+{% for m in matchers %}
+<tr>
+    <td>{{ m[0] }}</td>
+    <td>{{ m[1] }}</td>
+    <td>{{ m[2] }}</td>
+    <td>{{ m[3] }}</td>
+    <td>{{ m[4] }}</td>
+    <td>{{ m[5] }}</td>
+</tr>
+{% endfor %}
+</table>

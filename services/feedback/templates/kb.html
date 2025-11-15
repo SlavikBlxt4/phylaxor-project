@@ -1,0 +1,16 @@
+<h2>Knowledge Base</h2>
+<table border="1">
+<tr>
+    <th>ID</th><th>Title</th><th>Severity</th><th>Tags</th><th>Version</th><th>Enabled</th>
+</tr>
+{% for i in items %}
+<tr>
+    <td>{{ i[0] }}</td>
+    <td>{{ i[1] }}</td>
+    <td>{{ i[2] }}</td>
+    <td>{{ i[3] }}</td>
+    <td>{{ i[4] }}</td>
+    <td>{{ i[5] }}</td>
+</tr>
+{% endfor %}
+</table>
