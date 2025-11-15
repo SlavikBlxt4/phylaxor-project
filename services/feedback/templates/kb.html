@@ -1,16 +1,45 @@
-<h2>Knowledge Base</h2>
-<table border="1">
-<tr>
-    <th>ID</th><th>Title</th><th>Severity</th><th>Tags</th><th>Version</th><th>Enabled</th>
-</tr>
-{% for i in items %}
-<tr>
-    <td>{{ i[0] }}</td>
-    <td>{{ i[1] }}</td>
-    <td>{{ i[2] }}</td>
-    <td>{{ i[3] }}</td>
-    <td>{{ i[4] }}</td>
-    <td>{{ i[5] }}</td>
-</tr>
-{% endfor %}
-</table>
+{% extends "base.html" %}
+
+{% block title %}Knowledge Base · Phylaxor{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <h2>Knowledge Base</h2>
+        <p class="lead">Maintain the curated content that backs detections and playbooks.</p>
+    </div>
+</section>
+
+{% if items %}
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Title</th>
+                <th scope="col">Severity</th>
+                <th scope="col">Tags</th>
+                <th scope="col">Version</th>
+                <th scope="col">Enabled</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in items %}
+            <tr>
+                <td data-label="ID">{{ i[0] }}</td>
+                <td data-label="Title">{{ i[1] }}</td>
+                <td data-label="Severity"><span class="badge severity-{{ i[2]|lower }}">{{ i[2] }}</span></td>
+                <td data-label="Tags">{{ i[3] }}</td>
+                <td data-label="Version">{{ i[4] }}</td>
+                <td data-label="Enabled">
+                    <span class="badge {{ 'positive' if i[5] else 'neutral' }}">{{ 'Yes' if i[5] else 'No' }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No knowledge base items found.</p>
+{% endif %}
+{% endblock %}

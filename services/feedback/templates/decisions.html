@@ -1,17 +1,45 @@
-<h2>Decisions</h2>
-<table border="1">
-<tr>
-    <th>ID</th><th>Path</th><th>Rule</th><th>KB</th><th>Latency</th><th>At</th><th>Alert</th>
-</tr>
-{% for d in decisions %}
-<tr>
-    <td>{{ d[0] }}</td>
-    <td>{{ d[1] }}</td>
-    <td>{{ d[2] }}</td>
-    <td>{{ d[3] }}</td>
-    <td>{{ d[4] }}ms</td>
-    <td>{{ d[5] }}</td>
-    <td>{{ d[6] }}</td>
-</tr>
-{% endfor %}
-</table>
+{% extends "base.html" %}
+
+{% block title %}Decisions · Phylaxor{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <h2>Decisions</h2>
+        <p class="lead">Validate how alerts are processed and triaged by the automation layer.</p>
+    </div>
+</section>
+
+{% if decisions %}
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Path</th>
+                <th scope="col">Rule</th>
+                <th scope="col">KB</th>
+                <th scope="col">Latency</th>
+                <th scope="col">At</th>
+                <th scope="col">Alert</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in decisions %}
+            <tr>
+                <td data-label="ID">{{ d[0] }}</td>
+                <td data-label="Path" class="mono">{{ d[1] }}</td>
+                <td data-label="Rule">{{ d[2] }}</td>
+                <td data-label="KB">{{ d[3] }}</td>
+                <td data-label="Latency">{{ d[4] }} ms</td>
+                <td data-label="At">{{ d[5] }}</td>
+                <td data-label="Alert">{{ d[6] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No decisions have been recorded yet.</p>
+{% endif %}
+{% endblock %}

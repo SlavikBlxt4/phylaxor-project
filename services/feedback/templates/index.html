@@ -1,15 +1,37 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Phylaxor Dashboard</title>
-</head>
-<body>
-    <h1>Phylaxor Dashboard</h1>
-    <ul>
-        <li><a href="/dashboard/alerts">Alerts</a></li>
-        <li><a href="/dashboard/decisions">Decisions</a></li>
-        <li><a href="/dashboard/kb">Knowledge Base</a></li>
-        <li><a href="/dashboard/matchers">KB Matchers</a></li>
-    </ul>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Dashboard Overview · Phylaxor{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h2>Stay on top of your detections</h2>
+    <p>Explore recent alerts, follow automated decisions, and fine-tune the knowledge base—all from one focused dashboard.</p>
+    <div class="hero-actions">
+        <a class="button primary" href="/dashboard/alerts">View latest alerts</a>
+        <a class="button" href="/dashboard/kb">Manage knowledge base</a>
+    </div>
+</section>
+
+<section class="grid">
+    <article class="card">
+        <h3>Alerts</h3>
+        <p>Inspect the newest incoming alerts and track their status to respond quickly.</p>
+        <a class="button ghost" href="/dashboard/alerts">Open alerts</a>
+    </article>
+    <article class="card">
+        <h3>Decisions</h3>
+        <p>Review automated decisioning to validate detections and provide feedback.</p>
+        <a class="button ghost" href="/dashboard/decisions">Open decisions</a>
+    </article>
+    <article class="card">
+        <h3>Knowledge Base</h3>
+        <p>Curate the intelligence that powers your detections with severity and tagging.</p>
+        <a class="button ghost" href="/dashboard/kb">Manage KB</a>
+    </article>
+    <article class="card">
+        <h3>KB Matchers</h3>
+        <p>Fine tune the matching rules that map events to knowledge base items.</p>
+        <a class="button ghost" href="/dashboard/matchers">Tune matchers</a>
+    </article>
+</section>
+{% endblock %}

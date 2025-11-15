@@ -1,16 +1,43 @@
-<h2>KB Matchers</h2>
-<table border="1">
-<tr>
-    <th>ID</th><th>KB ID</th><th>Kind</th><th>Field</th><th>Operator</th><th>Value</th>
-</tr>
-{% for m in matchers %}
-<tr>
-    <td>{{ m[0] }}</td>
-    <td>{{ m[1] }}</td>
-    <td>{{ m[2] }}</td>
-    <td>{{ m[3] }}</td>
-    <td>{{ m[4] }}</td>
-    <td>{{ m[5] }}</td>
-</tr>
-{% endfor %}
-</table>
+{% extends "base.html" %}
+
+{% block title %}KB Matchers · Phylaxor{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <h2>KB Matchers</h2>
+        <p class="lead">Understand how incoming data is associated with knowledge base entries.</p>
+    </div>
+</section>
+
+{% if matchers %}
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">KB ID</th>
+                <th scope="col">Kind</th>
+                <th scope="col">Field</th>
+                <th scope="col">Operator</th>
+                <th scope="col">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in matchers %}
+            <tr>
+                <td data-label="ID">{{ m[0] }}</td>
+                <td data-label="KB ID">{{ m[1] }}</td>
+                <td data-label="Kind">{{ m[2] }}</td>
+                <td data-label="Field">{{ m[3] }}</td>
+                <td data-label="Operator">{{ m[4] }}</td>
+                <td data-label="Value" class="mono">{{ m[5] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No matchers configured yet.</p>
+{% endif %}
+{% endblock %}
