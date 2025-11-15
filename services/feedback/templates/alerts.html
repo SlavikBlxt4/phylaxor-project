@@ -1,15 +1,41 @@
-<h2>Alerts</h2>
-<table border="1">
-<tr>
-    <th>ID</th><th>Name</th><th>Fingerprint</th><th>Start</th><th>Status</th>
-</tr>
-{% for a in alerts %}
-<tr>
-    <td>{{ a[0] }}</td>
-    <td>{{ a[1] }}</td>
-    <td>{{ a[2] }}</td>
-    <td>{{ a[3] }}</td>
-    <td>{{ a[4] }}</td>
-</tr>
-{% endfor %}
-</table>
+{% extends "base.html" %}
+
+{% block title %}Alerts · Phylaxor{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <h2>Alerts</h2>
+        <p class="lead">A snapshot of the most recent signals flowing into Phylaxor.</p>
+    </div>
+</section>
+
+{% if alerts %}
+<div class="table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Name</th>
+                <th scope="col">Fingerprint</th>
+                <th scope="col">Start</th>
+                <th scope="col">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in alerts %}
+            <tr>
+                <td data-label="ID">{{ a[0] }}</td>
+                <td data-label="Name">{{ a[1] }}</td>
+                <td data-label="Fingerprint" class="mono">{{ a[2] }}</td>
+                <td data-label="Start">{{ a[3] }}</td>
+                <td data-label="Status"><span class="status {{ a[4]|lower }}">{{ a[4] }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No alerts to display yet.</p>
+{% endif %}
+{% endblock %}
