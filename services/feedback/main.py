@@ -11,7 +11,7 @@ app = FastAPI()
 # ------------------------------
 # DB
 # ------------------------------
-PG_DSN = os.getenv("PG_DSN=dbname=phylaxor user=postgres password=postgres host=postgres.phylaxor-db.svc")
+PG_DSN = os.getenv("PG_DSN", "dbname=phylaxor user=postgres password=postgres host=postgres")
 
 def pg():
     return psycopg2.connect(PG_DSN)
