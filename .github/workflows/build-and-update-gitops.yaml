@@ -83,27 +83,33 @@ jobs:
         curl -sL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq
         chmod +x /usr/local/bin/yq
 
-    - name: Update values.yaml (dynamic key)
+    - name: Update values files (minikube & openshift)
       id: update
-      env:
-        VALUES_FILE: gitops/apps/phylaxor/values.yaml
       run: |
         set -euo pipefail
-        echo "Will update $(pwd)/$VALUES_FILE"
         
-        while IFS='=' read -r svc tag; do
-          [ -z "${svc:-}" ] && continue
-          echo "▶ Updating ${svc} to tag ${tag}"
-          # Pasamos variables como ENV a yq:
-          SERVICE="$svc" VERSION="$tag" \
-            yq -i '.images[env(SERVICE)].tag = strenv(VERSION)' "$VALUES_FILE"
-        done < image_tags.txt
+        # Function to update a single values file
+        update_values_file() {
+          local VALUES_FILE="$1"
+          echo "▶ Updating $VALUES_FILE"
+          
+          while IFS='=' read -r svc tag; do
+            [ -z "${svc:-}" ] && continue
+            echo "  - Updating ${svc} to tag ${tag}"
+            SERVICE="$svc" VERSION="$tag" \
+              yq -i '.images[env(SERVICE)].tag = strenv(VERSION)' "$VALUES_FILE"
+          done < image_tags.txt
+          
+          echo "========= DIFF in $VALUES_FILE ========="
+          git -C gitops diff --color=always "$VALUES_FILE" || true
+        }
         
-        echo "========= DIFF in values.yaml ========="
-        git -C gitops diff --color=always apps/phylaxor/values.yaml || true
+        # Update both values files
+        update_values_file "gitops/apps/phylaxor/values-minikube.yaml"
+        update_values_file "gitops/apps/phylaxor/values-openshift.yaml"
         
-        # Señalizamos si hay cambios reales
-        if git -C gitops diff --quiet --exit-code apps/phylaxor/values.yaml; then
+        # Check if any file has changes
+        if git -C gitops diff --quiet --exit-code gitops/apps/phylaxor/values-minikube.yaml gitops/apps/phylaxor/values-openshift.yaml; then
           echo "changed=false" >> "$GITHUB_OUTPUT"
         else
           echo "changed=true" >> "$GITHUB_OUTPUT"
