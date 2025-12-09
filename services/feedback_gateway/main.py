@@ -2,20 +2,26 @@ import os, time, requests, psycopg2
 from psycopg2.extras import Json
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-PG_DSN = os.getenv("PG_DSN","dbname=phylaxor user=postgres password=postgres host=postgres")
+PG_DSN = os.getenv("PG_DSN", "dbname=phylaxor user=postgres password=postgres host=postgres")
 
 API = f"https://api.telegram.org/bot{TOKEN}"
+
+OFFSET_FILE = os.getenv("OFFSET_FILE", "/tmp/offset.txt")  # 👈 NUEVO
 
 def pg():
     return psycopg2.connect(PG_DSN)
 
 def mark_offset(offset):
-    open("/app/offset.txt","w").write(str(offset))
+    # nos aseguramos de que el directorio exista, por si algún día no es /tmp
+    os.makedirs(os.path.dirname(OFFSET_FILE), exist_ok=True)
+    with open(OFFSET_FILE, "w") as f:
+        f.write(str(offset))
 
 def get_offset():
     try:
-        return int(open("/app/offset.txt").read())
-    except:
+        with open(OFFSET_FILE) as f:
+            return int(f.read())
+    except Exception:
         return 0
 
 def save_feedback(decision_id, vote):
