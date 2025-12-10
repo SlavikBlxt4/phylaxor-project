@@ -2,11 +2,11 @@ import os, time, requests, psycopg2
 from psycopg2.extras import Json
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-PG_DSN = os.getenv("PG_DSN", "dbname=phylaxor user=postgres password=postgres host=postgres")
+PG_DSN = os.getenv("PG_DSN", "dbname=phylaxor user=postgres password=postgres host=postgres.phylaxor-db.svc.cluster.local")
 
 API = f"https://api.telegram.org/bot{TOKEN}"
 
-OFFSET_FILE = os.getenv("OFFSET_FILE", "/tmp/offset.txt")  # 👈 NUEVO
+OFFSET_FILE = os.getenv("OFFSET_FILE", "/tmp/offset.txt")
 
 def pg():
     return psycopg2.connect(PG_DSN)
