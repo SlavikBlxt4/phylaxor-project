@@ -2,7 +2,7 @@ import os, json, time, redis, requests, psycopg2
 from psycopg2.extras import Json
 
 REDIS_HOST   = os.getenv("REDIS_HOST","redis")
-PG_DSN       = os.getenv("PG_DSN","dbname=phylaxor user=postgres password=postgres host=postgres")
+PG_DSN       = os.getenv("PG_DSN","dbname=phylaxor user=postgres password=postgres host=postgres.phylaxor-db.svc.cluster.local")
 NOTIFIER_URL = os.getenv("NOTIFIER_URL","http://notifier:8082/send")
 
 r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
@@ -109,16 +109,16 @@ def match_kb(evt):
       SELECT ki.id AS kb_id,
              COUNT(*) AS total,
              SUM((
-                (km.kind='alertname' AND km.operator='eq'       AND (SELECT alertname FROM evt)=km.value) OR
-                (km.kind='alertname' AND km.operator='contains' AND (SELECT alertname FROM evt) ILIKE '%%'||km.value||'%%') OR
-                (km.kind='alertname' AND km.operator='regex'    AND (SELECT alertname FROM evt) ~* km.value) OR
-                (km.kind='namespace' AND km.operator='eq'       AND (SELECT namespace FROM evt)=km.value) OR
-                (km.kind='namespace' AND km.operator='contains' AND (SELECT namespace FROM evt) ILIKE '%%'||km.value||'%%') OR
-                (km.kind='namespace' AND km.operator='regex'    AND (SELECT namespace FROM evt) ~* km.value) OR
-                (km.kind='label' AND km.operator='eq'           AND (SELECT labels->>km.field FROM evt)=km.value) OR
-                (km.kind='label' AND km.operator='contains'     AND (SELECT labels->>km.field FROM evt) ILIKE '%%'||km.value||'%%') OR
-                (km.kind='label' AND km.operator='regex'        AND (SELECT labels->>km.field FROM evt) ~* km.value) OR
-                (km.kind='regex'  AND km.operator='regex'       AND (
+                (km.kind='alertname' AND km.operator='eq'       AND (SELECT alertname  FROM evt)=km.value) OR
+                (km.kind='alertname' AND km.operator='contains' AND (SELECT alertname  FROM evt) ILIKE '%%'||km.value||'%%') OR
+                (km.kind='alertname' AND km.operator='regex'    AND (SELECT alertname  FROM evt) ~* km.value) OR
+                (km.kind='namespace' AND km.operator='eq'       AND (SELECT namespace  FROM evt)=km.value) OR
+                (km.kind='namespace' AND km.operator='contains' AND (SELECT namespace  FROM evt) ILIKE '%%'||km.value||'%%') OR
+                (km.kind='namespace' AND km.operator='regex'    AND (SELECT namespace  FROM evt) ~* km.value) OR
+                (km.kind='label'     AND km.operator='eq'       AND (SELECT labels->>km.field FROM evt)=km.value) OR
+                (km.kind='label'     AND km.operator='contains' AND (SELECT labels->>km.field FROM evt) ILIKE '%%'||km.value||'%%') OR
+                (km.kind='label'     AND km.operator='regex'    AND (SELECT labels->>km.field FROM evt) ~* km.value) OR
+                (km.kind='regex'     AND km.operator='regex'    AND (
                     (SELECT alertname FROM evt) || ' ' || (SELECT labels::text FROM evt)
                 ) ~* km.value)
              )::int) AS matched
@@ -127,11 +127,26 @@ def match_kb(evt):
       WHERE ki.enabled = TRUE
       GROUP BY ki.id
     )
-    SELECT ki.id, ki.title, ki.checks, ki.fixes, ki.severity, ki.version
-    FROM m JOIN kb_items ki ON ki.id = m.kb_id
+    SELECT
+      ki.id,
+      ki.title,
+      ki.checks,
+      ki.fixes,
+      ki.severity,
+      ki.version,
+      COALESCE(s.success_rate, 50.0) AS success_rate  -- KB sin feedback: 50% por defecto
+    FROM m
+    JOIN kb_items ki ON ki.id = m.kb_id
+    LEFT JOIN kb_stats s ON s.kb_id = ki.id
     WHERE m.total = m.matched
     ORDER BY
-      CASE ki.severity WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC,
+      CASE ki.severity
+        WHEN 'critical' THEN 4
+        WHEN 'high'     THEN 3
+        WHEN 'medium'   THEN 2
+        ELSE 1
+      END DESC,
+      COALESCE(s.success_rate, 50.0) DESC,
       ki.version DESC
     LIMIT 1;
     """
@@ -141,8 +156,7 @@ def match_kb(evt):
         row = cur.fetchone()
         if not row:
             return None
-        kb_id, title, checks, fixes, severity, version = row
-        # checks/fixes vendrán como JSONB -> Python (lista). Render básico con contexto:
+        kb_id, title, checks, fixes, severity, version, success_rate = row
         ctx = _context_from(evt)
         checks = [ _render(c, ctx) for c in (checks or []) ]
         fixes  = [ _render(f, ctx) for f in (fixes  or []) ]
@@ -153,8 +167,10 @@ def match_kb(evt):
             "fixes": fixes,
             "hypotheses": [],
             "severity": severity,
-            "version": version
+            "version": version,
+            "success_rate": float(success_rate),
         }
+
 
 def store_alert(cur, evt):
     cur.execute("""INSERT INTO alerts(fingerprint,alertname,labels,starts_at,status)
