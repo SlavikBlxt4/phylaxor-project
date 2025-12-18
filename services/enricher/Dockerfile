@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 # Dependencias de la app
 WORKDIR /app
 COPY worker.py /app/worker.py
+COPY log_provider.py /app/log_provider.py
 RUN pip install --no-cache-dir redis kubernetes
 
 # Crear usuario/grupo sin privilegios y dar permisos a /app
