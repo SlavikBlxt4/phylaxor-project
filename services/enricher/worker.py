@@ -5,6 +5,7 @@ import signal
 import sys
 import traceback
 import redis
+from log_provider import get_log_provider
 
 # ===============================
 # Configuración básica
@@ -15,10 +16,13 @@ RPORT = int(os.getenv("REDIS_SERVICE_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 
 # Flags para controlar qué tan "pesado" es el contexto
-ENABLE_LOGS = os.getenv("ENRICHER_ENABLE_LOGS", "true").lower() == "true"
-ENABLE_EVENTS = os.getenv("ENRICHER_ENABLE_EVENTS", "true").lower() == "true"
-LOG_LINES = int(os.getenv("ENRICHER_LOG_LINES", "200"))
+LOGS_MODE = os.getenv("PHYLAXOR_LOGS_MODE", "none")
+ENABLE_EVENTS = os.getenv("PHYLAXOR_EVENTS_ENABLED", "true").lower() == "true"
+LOG_LINES = int(os.getenv("PHYLAXOR_LOGS_MAX_LINES", "500"))
 EVENT_LIMIT = int(os.getenv("ENRICHER_EVENT_LIMIT", "20"))
+
+# Log provider (will be initialized after K8s client is available)
+LOG_PROVIDER = None
 
 # Redis client
 r = redis.Redis(host=RHOST, port=RPORT, db=REDIS_DB)
@@ -44,6 +48,18 @@ try:
 except Exception as e:
     print(f"[enricher] Kubernetes client not available: {e}", file=sys.stderr, flush=True)
     traceback.print_exc()
+
+# Initialize log provider (after K8s client setup)
+try:
+    LOG_PROVIDER = get_log_provider(LOGS_MODE, core_api=core if K8S_AVAILABLE else None)
+    print(f"[enricher] Log provider initialized: mode={LOGS_MODE}", flush=True)
+except Exception as e:
+    print(f"[enricher] Error initializing log provider: {e}", file=sys.stderr, flush=True)
+    traceback.print_exc()
+    # Fallback to None provider
+    from log_provider import NoneLogProvider
+    LOG_PROVIDER = NoneLogProvider()
+    print(f"[enricher] Fallback to NoneLogProvider", flush=True)
 
 
 # ===============================
@@ -183,23 +199,9 @@ def get_recent_events(ns: str, pod: str):
 
 
 def get_pod_logs(ns: str, pod: str):
-    if not K8S_AVAILABLE or not ns or not pod or not ENABLE_LOGS:
+    if not K8S_AVAILABLE or not ns or not pod or LOG_PROVIDER is None:
         return None
-
-    def _inner():
-        # Logs del primer contenedor (puede mejorar más adelante)
-        log = core.read_namespaced_pod_log(
-            name=pod,
-            namespace=ns,
-            tail_lines=LOG_LINES,
-            _request_timeout=2
-        )
-        # truncamos por si acaso
-        if len(log) > 8000:
-            log = log[-8000:]
-        return log
-
-    return safe_call(_inner, default=None, label=f"get_pod_logs({ns}/{pod})")
+    return LOG_PROVIDER.get_logs(ns, pod)
 
 
 def detect_workload(ns: str, pod_obj):

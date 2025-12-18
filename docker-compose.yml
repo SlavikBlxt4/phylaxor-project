@@ -24,6 +24,12 @@ services:
     build: ./services/enricher
     environment:
       REDIS_HOST: redis
+      PHYLAXOR_LOGS_MODE: "none"
+      PHYLAXOR_EVENTS_ENABLED: "true"
+      PHYLAXOR_LOGS_MAX_LINES: "500"
+      PHYLAXOR_LOGS_MAX_BYTES: "100000"
+      PHYLAXOR_LOGS_LOOKBACK: "300"
+      PHYLAXOR_LOGS_TIMEOUT: "5"
     depends_on: [redis]
 
   notifier:
