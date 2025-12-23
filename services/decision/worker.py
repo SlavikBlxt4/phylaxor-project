@@ -134,7 +134,7 @@ def match_kb(evt):
       ki.fixes,
       ki.severity,
       ki.version,
-      COALESCE(s.success_rate, 50.0) AS success_rate  -- KB sin feedback: 50% por defecto
+      COALESCE(s.success_rate, 50.0) AS success_rate  -- KB sin feedback: 50 por defecto
     FROM m
     JOIN kb_items ki ON ki.id = m.kb_id
     LEFT JOIN kb_stats s ON s.kb_id = ki.id
