@@ -208,12 +208,15 @@ def detect_workload(ns: str, pod_obj):
     if not K8S_AVAILABLE or not ns or not pod_obj:
         return None
 
-    owner_refs = (pod_obj.get("ownerReferences")
-                  or pod_obj.get("metadata", {}).get("ownerReferences")
-                  or [])
-    # si viniera el objeto crudo de K8s
+    # Prefer K8s client objects, fallback to dict payloads.
     if hasattr(pod_obj, "metadata"):
         owner_refs = pod_obj.metadata.owner_references or []
+    elif isinstance(pod_obj, dict):
+        owner_refs = (pod_obj.get("ownerReferences")
+                      or pod_obj.get("metadata", {}).get("ownerReferences")
+                      or [])
+    else:
+        owner_refs = []
 
     def to_dict_owner(o):
         return {
