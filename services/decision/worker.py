@@ -110,13 +110,13 @@ def match_kb(evt):
              COUNT(*) AS total,
              SUM((
                 (km.kind='alertname' AND km.operator='eq'       AND (SELECT alertname  FROM evt)=km.value) OR
-                (km.kind='alertname' AND km.operator='contains' AND (SELECT alertname  FROM evt) ILIKE '%%'||km.value||'%%') OR
+                (km.kind='alertname' AND km.operator='contains' AND (SELECT alertname  FROM evt) ILIKE (chr(37) || km.value || chr(37))) OR
                 (km.kind='alertname' AND km.operator='regex'    AND (SELECT alertname  FROM evt) ~* km.value) OR
                 (km.kind='namespace' AND km.operator='eq'       AND (SELECT namespace  FROM evt)=km.value) OR
-                (km.kind='namespace' AND km.operator='contains' AND (SELECT namespace  FROM evt) ILIKE '%%'||km.value||'%%') OR
+                (km.kind='namespace' AND km.operator='contains' AND (SELECT namespace  FROM evt) ILIKE (chr(37) || km.value || chr(37))) OR
                 (km.kind='namespace' AND km.operator='regex'    AND (SELECT namespace  FROM evt) ~* km.value) OR
                 (km.kind='label'     AND km.operator='eq'       AND (SELECT labels->>km.field FROM evt)=km.value) OR
-                (km.kind='label'     AND km.operator='contains' AND (SELECT labels->>km.field FROM evt) ILIKE '%%'||km.value||'%%') OR
+                (km.kind='label'     AND km.operator='contains' AND (SELECT labels->>km.field FROM evt) ILIKE (chr(37) || km.value || chr(37))) OR
                 (km.kind='label'     AND km.operator='regex'    AND (SELECT labels->>km.field FROM evt) ~* km.value) OR
                 (km.kind='regex'     AND km.operator='regex'    AND (
                     (SELECT alertname FROM evt) || ' ' || (SELECT labels::text FROM evt)
