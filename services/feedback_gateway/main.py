@@ -34,7 +34,7 @@ def save_feedback(decision_id, vote):
 
 def run():
     offset = get_offset()
-    print("Starting feedback poller...")
+    print("[feedback] starting feedback poller...", flush=True)
 
     while True:
         resp = requests.get(f"{API}/getUpdates", params={"timeout":25,"offset":offset})
@@ -55,6 +55,10 @@ def run():
 
             _, decision_id, vote = payload
             save_feedback(int(decision_id), vote=="up")
+            print(
+                f"[feedback] saved decision_id={decision_id} vote={vote}",
+                flush=True
+            )
 
             # confirm to user
             requests.post(f"{API}/answerCallbackQuery", data={

@@ -16,6 +16,7 @@ async def send(req: Request):
     decision_id = data.get("decision_id")
 
     if not BOT or not CHAT_ID:
+        print(f"[notifier] dry-run decision_id={decision_id} length={len(text)}", flush=True)
         print(f"[DRY] Would send: {text}")
         return {"ok": True, "dry": True}
 
@@ -36,4 +37,5 @@ async def send(req: Request):
     else:
         await BOT.send_message(chat_id=CHAT_ID, text=text)
 
+    print(f"[notifier] sent decision_id={decision_id} length={len(text)}", flush=True)
     return {"ok": True}

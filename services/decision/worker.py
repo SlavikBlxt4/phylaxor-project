@@ -195,7 +195,25 @@ def format_msg(evt, rec):
     parts += [f"- {f}" for f in rec.get("fixes",[])[:5]]
     return "\n".join(parts)
 
+def _notify(decision_id, evt, rec, path):
+    try:
+        resp = requests.post(
+            NOTIFIER_URL,
+            json={"decision_id": decision_id, "text": format_msg(evt, rec)},
+            timeout=5
+        )
+        print(
+            f"[decision] notifier sent path={path} decision_id={decision_id} status={resp.status_code}",
+            flush=True
+        )
+    except Exception as e:
+        print(
+            f"[decision] notifier error path={path} decision_id={decision_id}: {e}",
+            flush=True
+        )
+
 def main():
+    print("[decision] starting decision worker...", flush=True)
     while True:
         item = r.brpop("phylaxor_enriched", timeout=5)
         if not item:
@@ -203,11 +221,21 @@ def main():
         _, payload = item
         evt = json.loads(payload)
         t0 = time.time()
+        labels = evt.get("labels") or {}
+        print(
+            f"[decision] received alert alertname={evt.get('alertname')} "
+            f"fingerprint={evt.get('fingerprint')} namespace={labels.get('namespace')}",
+            flush=True
+        )
 
         # 1) guarda alerta
         with pg() as conn:
             with conn.cursor() as cur:
                 alert_id = store_alert(cur, evt)
+        print(
+            f"[decision] stored alert id={alert_id} fingerprint={evt.get('fingerprint')}",
+            flush=True
+        )
 
         # 2) histórico primero
         prev = previous_decision(evt)
@@ -216,10 +244,8 @@ def main():
             with pg() as conn:
                 with conn.cursor() as cur:
                     decision_id = store_decision(cur, alert_id, "history", "previous", evt.get("context"), prev, latency_ms=latency, kb_id=None, confidence=100, reason="exact/heuristic history match")
-            try:
-                requests.post(NOTIFIER_URL, json={"decision_id": decision_id, "text": format_msg(evt, prev)}, timeout=5)
-            except Exception as e:
-                print("Notifier error:", e, flush=True)
+            print(f"[decision] decision path=history id={decision_id} latency_ms={latency}", flush=True)
+            _notify(decision_id, evt, prev, "history")
             continue
 
         # 3) buscar conocimiento en DB
@@ -233,10 +259,8 @@ def main():
                         cur, alert_id, "kb", f"kb:{kb['kb_id']}", evt.get("context"),
                         rec, latency_ms=latency, kb_id=kb["kb_id"], confidence=100, reason="kb exact match"
                     )
-            try:
-                requests.post(NOTIFIER_URL, json={"decision_id": decision_id, "text": format_msg(evt, rec)}, timeout=5)
-            except Exception as e:
-                print("Notifier error:", e, flush=True)
+            print(f"[decision] decision path=kb id={decision_id} latency_ms={latency}", flush=True)
+            _notify(decision_id, evt, rec, "kb")
             continue
 
         # 4) fallback (IA/semantic llegará luego)
@@ -250,10 +274,8 @@ def main():
         with pg() as conn:
             with conn.cursor() as cur:
                 decision_id = store_decision(cur, alert_id, "fallback", "no_rule", evt.get("context"), rec, latency_ms=latency, kb_id=None, confidence=None, reason="no kb/hist match")
-        try:
-            requests.post(NOTIFIER_URL, json={"decision_id": decision_id, "text": format_msg(evt, rec)}, timeout=5)
-        except Exception as e:
-            print("Notifier error:", e, flush=True)
+        print(f"[decision] decision path=fallback id={decision_id} latency_ms={latency}", flush=True)
+        _notify(decision_id, evt, rec, "fallback")
 
 if __name__ == "__main__":
     main()

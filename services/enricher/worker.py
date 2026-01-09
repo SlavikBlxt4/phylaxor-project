@@ -358,6 +358,12 @@ def main():
         _, payload = item
         try:
             evt = json.loads(payload)
+            labels = evt.get("labels") or {}
+            print(
+                f"[enricher] received alert alertname={evt.get('alertname')} "
+                f"fingerprint={evt.get('fingerprint')} namespace={labels.get('namespace')}",
+                flush=True
+            )
 
             # context enriquecido
             context = {
@@ -367,6 +373,11 @@ def main():
             evt["context"] = context
 
             r.lpush("phylaxor_enriched", json.dumps(evt))
+            print(
+                f"[enricher] enriched alert fingerprint={evt.get('fingerprint')} "
+                "pushed=phylaxor_enriched",
+                flush=True
+            )
         except Exception as e:
             print(f"[enricher] error procesando evento: {e}", file=sys.stderr, flush=True)
             traceback.print_exc()
