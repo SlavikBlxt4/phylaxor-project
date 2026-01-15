@@ -37,62 +37,61 @@ def _context_from(evt):
         "node":      labels.get("node",""),
     }
 
+# Try specific import for different run contexts
+try:
+    import history_score
+except ImportError:
+    from . import history_score
+
 # ---------- histórico ----------
 def previous_decision(evt):
-    fp     = evt.get("fingerprint")
-    name   = evt.get("alertname")
-    labels = evt.get("labels") or {}
-    ns     = labels.get("namespace","default")
-    pod    = labels.get("pod","")
+    """
+    Looks up history by fingerprint.
+    Returns (recommendation_dict, reason_dict) if eligible.
+    Returns (None, reason_dict) if ineligible or no history.
+    """
+    fp = evt.get("fingerprint")
+    if not fp:
+        return None, {"gating_reason": "no_fingerprint"}
 
     with pg() as conn, conn.cursor() as cur:
-        if fp:
-            cur.execute("""
-                SELECT d.recommendation
-                FROM decisions d
-                JOIN alerts a ON a.id = d.alert_id
-                WHERE a.fingerprint = %s
-                ORDER BY d.id DESC
-                LIMIT 1;
-            """, (fp,))
-            row = cur.fetchone()
-            if row: return _jsonify(row[0])
-
+        # Fetch N=20 potential history items
+        # Including kb_id and rule_id for stable grouping keys
         cur.execute("""
-            SELECT d.recommendation
+            SELECT d.path, d.confidence, d.created_at, d.recommendation, d.id, d.kb_id, d.rule_id
             FROM decisions d
             JOIN alerts a ON a.id = d.alert_id
-            WHERE a.alertname = %s
-              AND a.labels->>'namespace' = %s
-              AND a.labels->>'pod' = %s
+            WHERE a.fingerprint = %s
             ORDER BY d.id DESC
-            LIMIT 1;
-        """, (name, ns, pod))
-        row = cur.fetchone()
-        if row: return _jsonify(row[0])
+            LIMIT %s;
+        """, (fp, history_score.DEFAULT_CONFIG["LIMIT"]))
+        
+        db_rows = cur.fetchall()
+        
+    if not db_rows:
+        return None, {"gating_reason": "no_history_found"}
+        
+    # Map DB tuples to dicts for scoring
+    # Columns: 0:path, 1:confidence, 2:created_at, 3:recommendation, 4:id, 5:kb_id, 6:rule_id
+    rows = []
+    for r in db_rows:
+        rows.append({
+            "path": r[0],
+            "confidence": r[1],
+            "created_at": r[2],
+            "recommendation": _jsonify(r[3]),
+            "id": r[4],
+            "kb_id": r[5],
+            "rule_id": r[6]
+        })
+        
+    eligible, best_rec, reason = history_score.calculate_score(rows)
+    
+    if eligible:
+        return best_rec, reason
+    else:
+        return None, reason
 
-        cur.execute("""
-            SELECT d.recommendation
-            FROM decisions d
-            JOIN alerts a ON a.id = d.alert_id
-            WHERE a.alertname = %s
-              AND a.labels->>'namespace' = %s
-            ORDER BY d.id DESC
-            LIMIT 1;
-        """, (name, ns))
-        row = cur.fetchone()
-        if row: return _jsonify(row[0])
-
-        cur.execute("""
-            SELECT d.recommendation
-            FROM decisions d
-            JOIN alerts a ON a.id = d.alert_id
-            WHERE a.alertname = %s
-            ORDER BY d.id DESC
-            LIMIT 1;
-        """, (name,))
-        row = cur.fetchone()
-        return _jsonify(row[0]) if row else None
 
 # ---------- match KB (todos los matchers deben cumplirse) ----------
 def match_kb(evt):
@@ -238,14 +237,28 @@ def main():
         )
 
         # 2) histórico primero
-        prev = previous_decision(evt)
-        if prev:
+        prev_rec, hist_reason = previous_decision(evt)
+        
+        # Log history status
+        print(
+            f"[decision] history check fingerprint={evt.get('fingerprint')} "
+            f"eligible={prev_rec is not None} reason={hist_reason.get('gating_reason')} "
+            f"score={hist_reason.get('score_final')} samples={hist_reason.get('valid_count')}",
+            flush=True
+        )
+
+        if prev_rec:
             latency = int((time.time()-t0)*1000)
             with pg() as conn:
                 with conn.cursor() as cur:
-                    decision_id = store_decision(cur, alert_id, "history", "previous", evt.get("context"), prev, latency_ms=latency, kb_id=None, confidence=100, reason="exact/heuristic history match")
+                    decision_id = store_decision(
+                        cur, alert_id, "history", "previous", evt.get("context"), 
+                        prev_rec, latency_ms=latency, kb_id=None, 
+                        confidence=hist_reason.get("score_final", 100), 
+                        reason=json.dumps(hist_reason)
+                    )
             print(f"[decision] decision path=history id={decision_id} latency_ms={latency}", flush=True)
-            _notify(decision_id, evt, prev, "history")
+            _notify(decision_id, evt, prev_rec, "history")
             continue
 
         # 3) buscar conocimiento en DB
