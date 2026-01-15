@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS alerts(
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS alerts_fingerprint_idx ON alerts (fingerprint);
+
 CREATE TABLE IF NOT EXISTS decisions(
   id             BIGSERIAL PRIMARY KEY,
   alert_id       BIGINT REFERENCES alerts(id),
