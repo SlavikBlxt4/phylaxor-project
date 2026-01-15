@@ -37,11 +37,15 @@ def _context_from(evt):
         "node":      labels.get("node",""),
     }
 
-# Try specific import for different run contexts
-try:
-    import history_score
-except ImportError:
-    from . import history_score
+import json
+import time
+
+# Ensure strictly running as script works if cwd is weird
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+import history_score
 
 # ---------- histórico ----------
 def previous_decision(evt):
