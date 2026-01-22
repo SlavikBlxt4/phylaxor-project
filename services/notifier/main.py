@@ -24,8 +24,8 @@ async def send(req: Request):
     if decision_id:
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("👍 Correcto", callback_data=f"fb:{decision_id}:1"),
-                InlineKeyboardButton("👎 Incorrecto", callback_data=f"fb:{decision_id}:0")
+                InlineKeyboardButton("👍 Correcto", callback_data=f"fb:{decision_id}:up"),
+                InlineKeyboardButton("👎 Incorrecto", callback_data=f"fb:{decision_id}:down")
             ]
         ])
 
