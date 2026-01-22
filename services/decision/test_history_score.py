@@ -139,6 +139,14 @@ class TestHistoryScore(unittest.TestCase):
         self.assertIn("kb:10", reason["chosen_recommendation_key"])
         self.assertEqual(reason["consensus_ratio"], 1.0)
 
+    def test_debug_reason_includes_details(self):
+        rows = [_row() for _ in range(2)]
+        eligible, rec, reason = calculate_score(rows, debug=True)
+        self.assertIn("rows_used", reason)
+        self.assertIn("config_effective", reason)
+        self.assertIsInstance(reason["rows_used"], list)
+        self.assertIsInstance(reason["config_effective"], dict)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -32,7 +32,7 @@ def _get_rec_key(row):
         return rec.get("summary", "")
     return str(rec)
 
-def calculate_score(rows, config=None):
+def calculate_score(rows, config=None, debug=False):
     """
     Evaluates history rows to determine eligibility and best recommendation.
     
@@ -46,6 +46,7 @@ def calculate_score(rows, config=None):
               - kb_id (optional)
               - rule_id (optional)
         config: Dict overriding defaults.
+        debug: If True, includes extra diagnostic fields in reason.
         
     Returns:
         (eligible (bool), best_recommendation (dict/None), reason (dict))
@@ -92,6 +93,25 @@ def calculate_score(rows, config=None):
         })
 
     total_valid = len(valid_rows)
+
+    groups_count = {}
+    groups_support = {}
+    top_candidates = []
+    rows_used = [
+        {
+            "id": item["original"].get("id"),
+            "path": item["original"].get("path"),
+            "conf": round(item["conf"], 2),
+            "age_days": round(item["age_days"], 2),
+            "rec_key": item["rec_key"],
+        }
+        for item in valid_rows[:20]
+    ]
+
+    if debug:
+        for item in valid_rows:
+            rec_key = item["rec_key"]
+            groups_count[rec_key] = groups_count.get(rec_key, 0) + 1
     
     reason = {
         "valid_count": total_valid,
@@ -106,6 +126,18 @@ def calculate_score(rows, config=None):
         "chosen_recommendation_key": None
     }
 
+    def _apply_debug(reason_dict):
+        if not debug:
+            return reason_dict
+        reason_dict.update({
+            "config_effective": cfg.copy(),
+            "groups_count": groups_count,
+            "groups_support": groups_support,
+            "top_candidates": top_candidates,
+            "rows_used": rows_used,
+        })
+        return reason_dict
+
     # 2. Check strict freshness failure
     # If we had candidates but they were all dropped due to age, report specific reason
     if total_valid == 0 and len(rows) > 0 and dropped_due_to_age > 0:
@@ -113,12 +145,12 @@ def calculate_score(rows, config=None):
          # Essentially, if valid_rows is 0 but we tried, and age killed them.
          reason["freshness_ok"] = False
          reason["gating_reason"] = "all_history_too_old"
-         return False, None, reason
+         return False, None, _apply_debug(reason)
 
     # 3. Minimum Sample Check
     if total_valid < cfg["MIN_SAMPLES"]:
         reason["gating_reason"] = "insufficient_samples"
-        return False, None, reason
+        return False, None, _apply_debug(reason)
 
     # 4. Consensus Check & Weighted Calcs
     groups = {}
@@ -142,6 +174,9 @@ def calculate_score(rows, config=None):
         weights.append(w)
         confs.append(item["conf"])
 
+    if debug:
+        groups_count = {k: len(v) for k, v in groups.items()}
+
     # Calculate Consensus Ratio
     max_group_count = max(len(g) for g in groups.values()) if groups else 0
     consensus_ratio = max_group_count / total_valid if total_valid > 0 else 0
@@ -149,7 +184,7 @@ def calculate_score(rows, config=None):
     
     if consensus_ratio < cfg["CONSENSUS_RATIO"]:
         reason["gating_reason"] = "low_consensus"
-        return False, None, reason
+        return False, None, _apply_debug(reason)
 
     # 5. Scoring
     # Weighted Average
@@ -175,7 +210,7 @@ def calculate_score(rows, config=None):
     
     if final_score < cfg["THRESHOLD"]:
         reason["gating_reason"] = "score_below_threshold"
-        return False, None, reason
+        return False, None, _apply_debug(reason)
         
     # 6. Selection
     # Highest weighted support per group
@@ -183,6 +218,12 @@ def calculate_score(rows, config=None):
     for k, group_rows in groups.items():
         support = sum(item["weight"] for item in group_rows)
         support_scores[k] = support
+
+    if debug:
+        groups_support = {k: round(v, 4) for k, v in support_scores.items()}
+        top_candidates = [
+            k for k, _ in sorted(support_scores.items(), key=lambda x: x[1], reverse=True)[:3]
+        ]
     
     # Sort groups by support DESC
     sorted_candidates = sorted(groups.items(), key=lambda x: support_scores[x[0]], reverse=True)
@@ -208,4 +249,4 @@ def calculate_score(rows, config=None):
     best_rec_obj = newest["original"]["recommendation"]
 
     reason["chosen_recommendation_key"] = best_key
-    return True, best_rec_obj, reason
+    return True, best_rec_obj, _apply_debug(reason)
