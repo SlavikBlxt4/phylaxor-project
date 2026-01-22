@@ -32,6 +32,14 @@ def save_feedback(decision_id, vote):
                 (decision_id, vote)
             )
 
+def _parse_vote(raw):
+    value = str(raw).strip().lower()
+    if value in ("1", "up", "true", "yes", "y", "on"):
+        return True
+    if value in ("0", "down", "false", "no", "n", "off"):
+        return False
+    return None
+
 def run():
     offset = get_offset()
     print("[feedback] starting feedback poller...", flush=True)
@@ -48,13 +56,21 @@ def run():
             if not cq: 
                 continue
 
-            # format: decision:52:up
+            # format: fb:52:1 or decision:52:up
             payload = cq["data"].split(":")
-            if len(payload) != 3: 
+            if len(payload) != 3:
                 continue
 
-            _, decision_id, vote = payload
-            save_feedback(int(decision_id), vote=="up")
+            _, decision_id, vote_raw = payload
+            vote = _parse_vote(vote_raw)
+            if vote is None:
+                print(
+                    f"[feedback] invalid vote payload={cq['data']}",
+                    flush=True
+                )
+                continue
+
+            save_feedback(int(decision_id), vote)
             print(
                 f"[feedback] saved decision_id={decision_id} vote={vote}",
                 flush=True
