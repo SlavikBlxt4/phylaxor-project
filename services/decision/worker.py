@@ -1,4 +1,4 @@
-import os, json, time, redis, requests, psycopg2
+4import os, json, time, redis, requests, psycopg2
 from psycopg2.extras import Json
 
 REDIS_HOST   = os.getenv("REDIS_HOST","redis")
@@ -46,6 +46,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import history_score
+from constants import KB_BASE_CONFIDENCE, AI_BASE_CONFIDENCE
 from logger import env_bool, log
 
 DEBUG_HISTORY = env_bool("PHYLAXOR_DEBUG_HISTORY", False)
@@ -241,92 +242,118 @@ def main():
             node=labels.get("node"),
         )
 
-        # 1) guarda alerta
+        # 1) Store Alert
         with pg() as conn:
             with conn.cursor() as cur:
                 alert_id = store_alert(cur, evt)
         log("stored_alert", alert_id=alert_id, fingerprint=evt.get("fingerprint"))
 
-        # 2) histórico primero
+        # 2) Make Decision
+        selected = make_decision(evt)
+
+        # 3) Store & Notify
+        latency = int((time.time()-t0)*1000)
+        with pg() as conn:
+            with conn.cursor() as cur:
+                decision_id = store_decision(
+                    cur, 
+                    alert_id, 
+                    selected["path"], 
+                    selected["rule_id"], 
+                    evt.get("context"), 
+                    selected["rec"], 
+                    latency_ms=latency, 
+                    kb_id=selected["kb_id"], 
+                    confidence=selected["confidence"], 
+                    reason=selected["reason"]
+                )
+        log(
+            "decision_made",
+            path=selected["path"],
+            decision_id=decision_id,
+            latency_ms=latency,
+            kb_id=selected["kb_id"],
+            rule_id=selected["rule_id"],
+            confidence=selected["confidence"]
+        )
+        _notify(decision_id, evt, selected["rec"], selected["path"])
+
+def make_decision(evt):
+    """
+    Selects the best decision based on confidence.
+    Returns a dict with keys: path, rule_id, kb_id, rec, confidence, reason
+    """
+    candidates = []
+    is_manual_ai = evt.get("force_ai", False)
+
+    # A. Gather Candidates (unless manual override)
+    if not is_manual_ai:
+        # History
         prev_rec, hist_reason = previous_decision(evt)
         
-        # Log history status
+        # Log history status side-effect (kept here for observability during candidate gathering)
         log(
             "history_check",
             fingerprint=evt.get("fingerprint"),
             eligible=prev_rec is not None,
             gating_reason=hist_reason.get("gating_reason"),
             score_final=hist_reason.get("score_final"),
-            valid_count=hist_reason.get("valid_count"),
-            consensus_ratio=hist_reason.get("consensus_ratio"),
-            dropped_due_to_age=hist_reason.get("dropped_due_to_age"),
         )
         if DEBUG_HISTORY:
             log("history_debug", fingerprint=evt.get("fingerprint"), reason=hist_reason)
 
         if prev_rec:
-            latency = int((time.time()-t0)*1000)
-            with pg() as conn:
-                with conn.cursor() as cur:
-                    decision_id = store_decision(
-                        cur, alert_id, "history", "previous", evt.get("context"), 
-                        prev_rec, latency_ms=latency, kb_id=None, 
-                        confidence=hist_reason.get("score_final", 100), 
-                        reason=json.dumps(hist_reason)
-                    )
-            log(
-                "decision_made",
-                path="history",
-                decision_id=decision_id,
-                latency_ms=latency,
-                kb_id=None,
-                rule_id="previous",
-            )
-            _notify(decision_id, evt, prev_rec, "history")
-            continue
+            candidates.append({
+                "path": "history",
+                "rule_id": "previous",
+                "kb_id": None,
+                "rec": prev_rec,
+                "confidence": hist_reason.get("score_final", 100),
+                "reason": json.dumps(hist_reason)
+            })
 
-        # 3) buscar conocimiento en DB
+        # Knowledge Base
         kb = match_kb(evt)
         if kb:
-            rec = { "summary": kb["summary"], "checks": kb["checks"], "hypotheses": [], "fixes": kb["fixes"] }
-            latency = int((time.time()-t0)*1000)
-            with pg() as conn:
-                with conn.cursor() as cur:
-                    decision_id = store_decision(
-                        cur, alert_id, "kb", f"kb:{kb['kb_id']}", evt.get("context"),
-                        rec, latency_ms=latency, kb_id=kb["kb_id"], confidence=100, reason="kb exact match"
-                    )
-            log(
-                "decision_made",
-                path="kb",
-                decision_id=decision_id,
-                latency_ms=latency,
-                kb_id=kb["kb_id"],
-                rule_id=f"kb:{kb['kb_id']}",
-            )
-            _notify(decision_id, evt, rec, "kb")
-            continue
+            rec_kb = { "summary": kb["summary"], "checks": kb["checks"], "hypotheses": [], "fixes": kb["fixes"] }
+            candidates.append({
+                "path": "kb",
+                "rule_id": f"kb:{kb['kb_id']}",
+                "kb_id": kb["kb_id"],
+                "rec": rec_kb,
+                "confidence": KB_BASE_CONFIDENCE,
+                "reason": "kb exact match"
+            })
 
-        # 4) fallback (IA/semantic llegará luego)
-        rec = {
-          "summary": "No KB match. AI path not implemented yet.",
-          "checks": ["kubectl get events -A | tail -n 50"],
-          "hypotheses": [],
-          "fixes": ["Add KB item or enable Brain Gateway"]
-        }
-        latency = int((time.time()-t0)*1000)
-        with pg() as conn:
-            with conn.cursor() as cur:
-                decision_id = store_decision(cur, alert_id, "fallback", "no_rule", evt.get("context"), rec, latency_ms=latency, kb_id=None, confidence=None, reason="no kb/hist match")
-        log(
-            "decision_made",
-            path="fallback",
-            decision_id=decision_id,
-            latency_ms=latency,
-            kb_id=None,
-            rule_id="no_rule",
-        )
-        _notify(decision_id, evt, rec, "fallback")
+    # B. AI / Fallback
+    ai_conf = AI_BASE_CONFIDENCE
+    ai_rule = "no_rule"
+    ai_trigger = "auto"
+    
+    if is_manual_ai:
+        ai_trigger = "manual"
+    
+    path_name = "ai" if is_manual_ai else "fallback"
+    
+    rec_ai = {
+      "summary": "AI Analysis requested." if is_manual_ai else "No KB match. AI path not implemented yet.",
+      "checks": ["kubectl get events -A | tail -n 50"],
+      "hypotheses": [],
+      "fixes": ["Add KB item or enable Brain Gateway"]
+    }
+    
+    candidates.append({
+        "path": path_name,
+        "rule_id": ai_rule,
+        "kb_id": None,
+        "rec": rec_ai,
+        "confidence": ai_conf,
+        "reason": f"triggered_by={ai_trigger}"
+    })
 
+    # C. Select Best
+    # Sort by confidence DESC. Stable sort preserves History > KB > AI order if confidences match.
+    selected = sorted(candidates, key=lambda x: (x["confidence"] if x["confidence"] is not None else 0), reverse=True)[0]
+    return selected
 if __name__ == "__main__":
     main()
