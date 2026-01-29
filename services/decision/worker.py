@@ -1,4 +1,4 @@
-4import os, json, time, redis, requests, psycopg2
+import os, json, time, redis, requests, psycopg2
 from psycopg2.extras import Json
 
 REDIS_HOST   = os.getenv("REDIS_HOST","redis")
