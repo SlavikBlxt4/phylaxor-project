@@ -1,0 +1,187 @@
+{
+    "scenario": "CrashLoopBackOff - Repetitive Logs",
+    "description": "A payment service pod is crashing repeatedly. Logs show repetitive Java OOM errors.",
+    "request": {
+        "meta": {
+            "requestId": "987fcdeb-51a2-43c1-z987-123456789012",
+            "timestamp": "2024-02-10T12:00:00Z",
+            "schemaVersion": "1.0"
+        },
+        "alert": {
+            "fingerprint": "v1:payment-service-pod",
+            "alertname": "KubePodCrashLoopBackOff",
+            "status": "firing",
+            "startsAt": "2024-02-10T11:50:00Z",
+            "severity": "critical",
+            "labels": {
+                "namespace": "payments",
+                "pod": "pay-api-7d8b9-x2z",
+                "severity": "critical"
+            },
+            "annotations": {
+                "summary": "Pod pay-api-7d8b9-x2z is restarting frequently."
+            }
+        },
+        "decision": {
+            "source": "knowledge_base",
+            "confidence": 0.7,
+            "matched": true,
+            "history": []
+        },
+        "context": {
+            "alertContext": {
+                "namespace": "payments",
+                "pod": "pay-api-7d8b9-x2z",
+                "podStatus": {
+                    "phase": "Running",
+                    "containerStatuses": [
+                        {
+                            "name": "api",
+                            "ready": false,
+                            "restartCount": 5,
+                            "state": {
+                                "waiting": "CrashLoopBackOff",
+                                "terminated": "Error"
+                            }
+                        }
+                    ]
+                },
+                "logs": "2024-02-10 11:59:50 INFO Starting payment-api v2.3\n2024-02-10 11:59:52 INFO Connected to DB\n2024-02-10 11:59:55 ERROR java.lang.OutOfMemoryError: Java heap space\n2024-02-10 11:59:55 ERROR java.lang.OutOfMemoryError: Java heap space\n2024-02-10 11:59:55 FATAL Uncaught exception in main thread: OOM",
+                "events": [
+                    {
+                        "type": "Warning",
+                        "reason": "BackOff",
+                        "message": "Back-off restarting failed container api",
+                        "count": 12
+                    }
+                ],
+                "node": {
+                    "name": "worker-02",
+                    "conditions": [
+                        {
+                            "type": "Ready",
+                            "status": "True"
+                        }
+                    ]
+                },
+                "storage": null,
+                "workload": {
+                    "kind": "Deployment",
+                    "name": "pay-api"
+                }
+            },
+            "cluster": {
+                "platform": "k8s",
+                "version": "v1.29.1",
+                "nodes": 3,
+                "nodeSummary": {
+                    "ready": 3,
+                    "notReady": 0
+                },
+                "defaultStorageClass": "standard"
+            }
+        },
+        "constraints": {
+            "readOnly": true,
+            "noSecrets": true,
+            "noDestructiveActions": true
+        },
+        "limits": {
+            "maxOutputTokens": 2048,
+            "logs": {
+                "maxChars": 5000,
+                "tailLines": 50,
+                "sinceSeconds": 300,
+                "dedupeRepeatedLines": true
+            },
+            "events": {
+                "maxItems": 20
+            }
+        },
+        "outputFormat": {
+            "type": "json",
+            "schemaVersion": "1.0"
+        }
+    },
+    "response": {
+        "schemaVersion": "1.0",
+        "requestId": "987fcdeb-51a2-43c1-z987-123456789012",
+        "provider": "openai",
+        "model": "gpt-4-turbo",
+        "summary": "Pod pay-api-7d8b9-x2z is crashing due to Java OutOfMemoryError (Heap Space).",
+        "triage": {
+            "severity": "critical",
+            "confidence": 1.0,
+            "category": "application_resource"
+        },
+        "hypotheses": [
+            {
+                "title": "Insufficient Java Heap Memory",
+                "confidence": 0.98,
+                "evidence": [
+                    "Log error: java.lang.OutOfMemoryError: Java heap space",
+                    "Container restart count: 5"
+                ],
+                "impact": "Payment service is unavailable, potentially affecting checkout flow."
+            }
+        ],
+        "recommendedActions": [
+            "Increase the memory limit in the deployment configuration",
+            "Analyze the heap dump if available to find memory leaks"
+        ],
+        "checks": [
+            {
+                "title": "Check Pod Resources",
+                "commands": [
+                    "kubectl get pod pay-api-7d8b9-x2z -n payments -o yaml"
+                ],
+                "reason": "To inspect current resource limits and requests."
+            },
+            {
+                "title": "Check Metrics",
+                "commands": [
+                    "kubectl top pod pay-api-7d8b9-x2z -n payments --containers"
+                ],
+                "reason": "To verify memory usage trends."
+            }
+        ],
+        "fixes": [
+            {
+                "title": "Increase Memory Limits",
+                "steps": [
+                    "kubectl edit deployment pay-api -n payments",
+                    "Locate resources.limits.memory",
+                    "Increase value (e.g., 512Mi -> 1Gi)",
+                    "Save and exit to trigger rollout"
+                ],
+                "risk": "low",
+                "requiresWrite": false
+            }
+        ],
+        "missingInfo": [
+            "Current JAVA_OPTS configuration"
+        ],
+        "safety": {
+            "notes": [
+                "Verify node capacity before increasing limits to avoid scheduling issues."
+            ]
+        },
+        "suggestedToolCalls": [
+            {
+                "tool": "get_k8s_resource",
+                "args": {
+                    "kind": "Deployment",
+                    "namespace": "payments",
+                    "name": "pay-api"
+                },
+                "reason": "To verify the current memory limit configuration in the deployment spec."
+            }
+        ],
+        "usage": {
+            "inputTokens": 800,
+            "outputTokens": 350,
+            "estimatedCostUsd": 0.03,
+            "latencyMs": 2100
+        }
+    }
+}

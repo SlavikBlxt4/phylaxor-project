@@ -1,0 +1,256 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://phylaxor.dev/schemas/ai_request.schema.json",
+    "title": "AIRequest",
+    "description": "Schema for the request payload sent to the AI Agent.",
+    "type": "object",
+    "required": [
+        "meta",
+        "alert",
+        "context",
+        "constraints"
+    ],
+    "properties": {
+        "meta": {
+            "type": "object",
+            "required": [
+                "requestId",
+                "timestamp",
+                "schemaVersion"
+            ],
+            "properties": {
+                "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "schemaVersion": {
+                    "type": "string",
+                    "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+                }
+            }
+        },
+        "alert": {
+            "type": "object",
+            "required": [
+                "fingerprint",
+                "alertname",
+                "status"
+            ],
+            "properties": {
+                "fingerprint": {
+                    "type": "string"
+                },
+                "alertname": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "startsAt": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object"
+                },
+                "annotations": {
+                    "type": "object"
+                }
+            }
+        },
+        "decision": {
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "matched": {
+                    "type": "boolean"
+                },
+                "history": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        "context": {
+            "type": "object",
+            "required": [
+                "alertContext",
+                "cluster"
+            ],
+            "properties": {
+                "alertContext": {
+                    "type": "object",
+                    "properties": {
+                        "namespace": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "pod": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "podStatus": {
+                            "type": [
+                                "object",
+                                "null"
+                            ]
+                        },
+                        "logs": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "events": {
+                            "type": [
+                                "array",
+                                "null"
+                            ],
+                            "items": {
+                                "type": "object"
+                            }
+                        },
+                        "node": {
+                            "type": [
+                                "object",
+                                "null"
+                            ]
+                        },
+                        "storage": {
+                            "type": [
+                                "object",
+                                "null"
+                            ]
+                        },
+                        "workload": {
+                            "type": [
+                                "object",
+                                "null"
+                            ]
+                        }
+                    }
+                },
+                "cluster": {
+                    "type": "object",
+                    "properties": {
+                        "platform": {
+                            "type": "string"
+                        },
+                        "version": {
+                            "type": "string"
+                        },
+                        "nodes": {
+                            "type": "integer"
+                        },
+                        "nodeSummary": {
+                            "type": "object",
+                            "properties": {
+                                "ready": {
+                                    "type": "integer"
+                                },
+                                "notReady": {
+                                    "type": "integer"
+                                }
+                            }
+                        },
+                        "defaultStorageClass": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "constraints": {
+            "type": "object",
+            "required": [
+                "readOnly",
+                "noSecrets",
+                "noDestructiveActions"
+            ],
+            "properties": {
+                "readOnly": {
+                    "type": "boolean",
+                    "const": true
+                },
+                "noSecrets": {
+                    "type": "boolean",
+                    "const": true
+                },
+                "noDestructiveActions": {
+                    "type": "boolean",
+                    "const": true
+                }
+            }
+        },
+        "limits": {
+            "type": "object",
+            "properties": {
+                "maxOutputTokens": {
+                    "type": "integer"
+                },
+                "logs": {
+                    "type": "object",
+                    "properties": {
+                        "maxChars": {
+                            "type": "integer"
+                        },
+                        "tailLines": {
+                            "type": "integer"
+                        },
+                        "sinceSeconds": {
+                            "type": "integer"
+                        },
+                        "dedupeRepeatedLines": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "events": {
+                    "type": "object",
+                    "properties": {
+                        "maxItems": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            }
+        },
+        "outputFormat": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "json"
+                    ]
+                },
+                "schemaVersion": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

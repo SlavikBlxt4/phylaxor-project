@@ -1,0 +1,158 @@
+{
+    "scenario": "Simple Alert - Node Not Ready",
+    "description": "A node in the cluster has stopped posting status (NotReady). No logs are available.",
+    "request": {
+        "meta": {
+            "requestId": "123e4567-e89b-12d3-a456-426614174000",
+            "timestamp": "2024-02-10T08:00:00Z",
+            "schemaVersion": "1.0"
+        },
+        "alert": {
+            "fingerprint": "v1:node-worker-01",
+            "alertname": "KubeNodeNotReady",
+            "status": "firing",
+            "startsAt": "2024-02-10T07:55:00Z",
+            "severity": "warning",
+            "labels": {
+                "node": "worker-01",
+                "severity": "warning"
+            },
+            "annotations": {
+                "summary": "Node worker-01 is not ready."
+            }
+        },
+        "decision": {
+            "source": "fallback",
+            "confidence": 0.0,
+            "matched": false
+        },
+        "context": {
+            "alertContext": {
+                "namespace": null,
+                "pod": null,
+                "podStatus": null,
+                "logs": null,
+                "events": [
+                    {
+                        "type": "Normal",
+                        "reason": "NodeNotReady",
+                        "message": "Node worker-01 status is now: False, reason: KubeletStopped",
+                        "count": 1
+                    }
+                ],
+                "node": {
+                    "name": "worker-01",
+                    "conditions": [
+                        {
+                            "type": "Ready",
+                            "status": "False",
+                            "reason": "KubeletStopped",
+                            "message": "Kubelet has stopped posting status"
+                        }
+                    ]
+                },
+                "storage": null,
+                "workload": null
+            },
+            "cluster": {
+                "platform": "k8s",
+                "version": "v1.29.1",
+                "nodes": 3,
+                "nodeSummary": {
+                    "ready": 2,
+                    "notReady": 1
+                },
+                "defaultStorageClass": "standard"
+            }
+        },
+        "constraints": {
+            "readOnly": true,
+            "noSecrets": true,
+            "noDestructiveActions": true
+        },
+        "limits": {
+            "maxOutputTokens": 1024,
+            "logs": {
+                "maxChars": 0,
+                "tailLines": 0,
+                "sinceSeconds": 300,
+                "dedupeRepeatedLines": true
+            },
+            "events": {
+                "maxItems": 10
+            }
+        },
+        "outputFormat": {
+            "type": "json",
+            "schemaVersion": "1.0"
+        }
+    },
+    "response": {
+        "schemaVersion": "1.0",
+        "requestId": "123e4567-e89b-12d3-a456-426614174000",
+        "provider": "openai",
+        "model": "gpt-4-turbo",
+        "summary": "Node worker-01 is reporting NotReady status because the Kubelet service has stopped posting updates.",
+        "triage": {
+            "severity": "warning",
+            "confidence": 0.95,
+            "category": "infrastructure"
+        },
+        "hypotheses": [
+            {
+                "title": "Kubelet Service Stopped",
+                "confidence": 0.9,
+                "evidence": [
+                    "Node condition Ready=False with reason KubeletStopped"
+                ],
+                "impact": "Pods scheduled on this node may become unreachable or fail to restart."
+            }
+        ],
+        "recommendedActions": [
+            "Check the status of the kubelet service on worker-01",
+            "Verify network connectivity to the node"
+        ],
+        "checks": [
+            {
+                "title": "Describe Node",
+                "commands": [
+                    "kubectl describe node worker-01"
+                ],
+                "reason": "To view detailed node conditions and recent events."
+            },
+            {
+                "title": "Check Node Events",
+                "commands": [
+                    "kubectl get events --field-selector involvedObject.kind=Node,involvedObject.name=worker-01"
+                ],
+                "reason": "To identify when the node stopped becoming ready."
+            }
+        ],
+        "fixes": [
+            {
+                "title": "Restart Kubelet",
+                "steps": [
+                    "SSH into worker-01",
+                    "sudo systemctl status kubelet",
+                    "sudo systemctl restart kubelet"
+                ],
+                "risk": "medium",
+                "requiresWrite": false
+            }
+        ],
+        "missingInfo": [],
+        "safety": {
+            "notes": [
+                "Do not drain the node unless confirmed it is unrecoverable.",
+                "Ensure SSH access is available before attempting manual fixes."
+            ]
+        },
+        "suggestedToolCalls": [],
+        "usage": {
+            "inputTokens": 450,
+            "outputTokens": 280,
+            "estimatedCostUsd": 0.02,
+            "latencyMs": 1200
+        }
+    }
+}
