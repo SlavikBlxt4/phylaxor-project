@@ -3,6 +3,7 @@ WORKDIR /app
 
 RUN pip install fastapi uvicorn psycopg2-binary jinja2 python-multipart
 
-COPY . .
+COPY src /app/src
+ENV PYTHONPATH=/app/src
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8083"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8083"]

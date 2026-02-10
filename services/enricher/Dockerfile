@@ -6,13 +6,13 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 # Dependencias de la app
 WORKDIR /app
-COPY worker.py /app/worker.py
-COPY log_provider.py /app/log_provider.py
+COPY src /app/src
+ENV PYTHONPATH=/app/src
 RUN pip install --no-cache-dir redis kubernetes
 
 # Crear usuario/grupo sin privilegios y dar permisos a /app
 RUN groupadd -g 10001 app && useradd -u 10001 -g 10001 -m -s /usr/sbin/nologin app \
- && chown -R 10001:10001 /app
+    && chown -R 10001:10001 /app
 
 USER 10001:10001
-CMD ["python","/app/worker.py"]
+CMD ["python","/app/src/worker.py"]

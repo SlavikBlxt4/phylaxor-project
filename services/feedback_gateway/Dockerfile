@@ -3,6 +3,7 @@ WORKDIR /app
 
 RUN pip install requests python-telegram-bot==13.14 psycopg2-binary==2.9.9
 
-COPY main.py .
+COPY src /app/src
+ENV PYTHONPATH=/app/src
 
-CMD ["python", "main.py"]
+CMD ["python", "src/main.py"]
