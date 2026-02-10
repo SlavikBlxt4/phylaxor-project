@@ -7,6 +7,8 @@ from config import settings
 from schemas import validator
 from ai_client import ai_client
 
+##TRIGGER GH ACTIONS
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
