@@ -7,7 +7,6 @@ from config import settings
 from schemas import validator
 from ai_client import ai_client
 
-##TRIGGER 
 
 # Configure logging
 logging.basicConfig(

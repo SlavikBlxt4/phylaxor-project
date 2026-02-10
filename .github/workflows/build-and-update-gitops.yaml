@@ -36,9 +36,15 @@ jobs:
           BASE_SHA="$(git rev-parse HEAD~1 || true)"
         fi
 
-        CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 'services/**' || true)
-        SERVICES=$(printf '%s\n' "$CHANGED_FILES" | awk -F/ 'NF>=2 {print $2}' | sort -u | xargs)
+        echo "Base: $BASE_SHA"
+        echo "Head: $HEAD_SHA"
 
+        CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- services/ || true)
+        echo "Changed Files from git diff:"
+        echo "$CHANGED_FILES"
+        
+        SERVICES=$(printf '%s\n' "$CHANGED_FILES" | awk -F/ 'NF>=2 {print $2}' | sort -u | xargs)
+        
         echo "SERVICES: ${SERVICES:-<none>}"
         echo "CHANGED_SERVICES=${SERVICES:-}" >> "$GITHUB_ENV"
         echo "CHANGED_SERVICES_CSV=$(echo "${SERVICES:-}" | tr ' ' ',' )" >> "$GITHUB_ENV"
