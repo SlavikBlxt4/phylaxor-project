@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS decisions(
 ALTER TABLE decisions ADD COLUMN IF NOT EXISTS kb_id      BIGINT;
 ALTER TABLE decisions ADD COLUMN IF NOT EXISTS confidence NUMERIC(5,2);
 ALTER TABLE decisions ADD COLUMN IF NOT EXISTS reason     TEXT;
+ALTER TABLE decisions ADD COLUMN IF NOT EXISTS ai_request_id TEXT;
 
 -- Feedback (igual que tenías)
 CREATE TABLE IF NOT EXISTS feedback(
@@ -36,6 +37,21 @@ CREATE TABLE IF NOT EXISTS feedback(
   vote        BOOLEAN,
   notes       TEXT,
   created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+-- AI usage metrics (idempotente)
+CREATE TABLE IF NOT EXISTS ai_usage(
+  id                BIGSERIAL PRIMARY KEY,
+  decision_id       BIGINT REFERENCES decisions(id),
+  alert_id          BIGINT REFERENCES alerts(id),
+  request_id        TEXT,
+  provider          TEXT,
+  model             TEXT,
+  input_tokens      INT,
+  output_tokens     INT,
+  estimated_cost_usd NUMERIC(12,6),
+  latency_ms        INT,
+  created_at        TIMESTAMPTZ DEFAULT now()
 );
 
 -- =========================

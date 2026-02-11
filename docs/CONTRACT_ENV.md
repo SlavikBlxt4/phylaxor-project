@@ -117,6 +117,45 @@ Credentials for Loki endpoint. Typically stored as Kubernetes Secrets.
 
 Alternative to basic auth for Loki.
 
+### Brain Gateway (Decision → AI)
+
+These variables control how the **decision** service calls the Brain Gateway (`POST /v1/brain/complete`).
+
+#### `BRAIN_GATEWAY_URL`
+- **Type**: String (URL)
+- **Default**: `http://brain-gateway:8080`
+- **Required**: No
+
+Base URL for Brain Gateway. The decision service appends `/v1/brain/complete`.
+
+#### `BRAIN_GATEWAY_TIMEOUT_SECONDS`
+- **Type**: Float
+- **Default**: `20`
+- **Required**: No
+
+HTTP timeout for Brain Gateway requests.
+
+#### `BRAIN_GATEWAY_MAX_RETRIES`
+- **Type**: Integer
+- **Default**: `2`
+- **Required**: No
+
+Maximum retry attempts for transient failures (5xx/timeouts only).
+
+#### `BRAIN_GATEWAY_RETRY_BACKOFF_MS`
+- **Type**: Integer
+- **Default**: `250`
+- **Required**: No
+
+Base backoff (in milliseconds) between retries.
+
+#### `BRAIN_GATEWAY_MAX_OUTPUT_TOKENS`
+- **Type**: Integer
+- **Default**: `1024`
+- **Required**: No
+
+Max tokens requested in the AIResponse (passed via AIRequest `limits.maxOutputTokens`).
+
 ## Expected Behavior by Mode
 
 ### Mode: `none`

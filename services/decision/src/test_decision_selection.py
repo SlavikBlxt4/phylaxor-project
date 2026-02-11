@@ -56,10 +56,12 @@ class TestDecisionSelection(unittest.TestCase):
 
     @patch('worker.match_kb')
     @patch('worker.previous_decision')
+    @patch('worker._call_brain_gateway')
     @patch('worker.log')
-    def test_fallback_wins_if_nothing_else(self, mock_log, mock_prev, mock_kb):
+    def test_fallback_wins_if_nothing_else(self, mock_log, mock_brain, mock_prev, mock_kb):
         mock_prev.return_value = (None, {})
         mock_kb.return_value = None
+        mock_brain.return_value = (None, "timeout", None)
         
         decision = worker.make_decision(evt={"fingerprint": "fp1"})
         
@@ -68,11 +70,28 @@ class TestDecisionSelection(unittest.TestCase):
 
     @patch('worker.match_kb')
     @patch('worker.previous_decision')
+    @patch('worker._call_brain_gateway')
     @patch('worker.log')
-    def test_manual_ai_trigger(self, mock_log, mock_prev, mock_kb):
+    def test_manual_ai_trigger(self, mock_log, mock_brain, mock_prev, mock_kb):
         # Even if history and KB exist
         mock_prev.return_value = ({"summary": "hist"}, {"score_final": 95.0})
         mock_kb.return_value = {"kb_id": 1, "summary": "kb", "checks": [], "fixes": []}
+        mock_brain.return_value = (
+            {
+                "schemaVersion": "1.0",
+                "requestId": "00000000-0000-0000-0000-000000000000",
+                "provider": "openai",
+                "model": "gpt-test",
+                "summary": "AI summary",
+                "triage": {"severity": "info", "confidence": 0.5, "category": "test"},
+                "hypotheses": [],
+                "recommendedActions": [],
+                "checks": [],
+                "fixes": [],
+            },
+            None,
+            10,
+        )
         
         evt = {"fingerprint": "fp1", "force_ai": True}
         
