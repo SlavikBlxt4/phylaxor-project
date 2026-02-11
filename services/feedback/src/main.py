@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import psycopg2
 import os
+from pathlib import Path
 
 app = FastAPI()
 
@@ -19,8 +20,18 @@ def pg():
 # ------------------------------
 # Templates & Static
 # ------------------------------
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+BASE_DIR = Path(__file__).resolve().parent
+templates_dir = BASE_DIR / "templates"
+static_dir = BASE_DIR / "static"
+
+# Fallback for legacy layout (templates/static next to src/)
+if not templates_dir.exists():
+    templates_dir = BASE_DIR.parent / "templates"
+if not static_dir.exists():
+    static_dir = BASE_DIR.parent / "static"
+
+templates = Jinja2Templates(directory=str(templates_dir))
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # ------------------------------
 # API: Feedback
