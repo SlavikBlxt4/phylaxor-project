@@ -5,7 +5,7 @@ import time
 
 from config import settings
 from schemas import validator
-from ai_client import ai_client
+from ai_client import ai_client, InvalidAIRequest
 
 
 # Configure logging
@@ -56,6 +56,12 @@ async def complete_analysis(request: Request):
     try:
         logger.info(f"Processing request {body.get('meta', {}).get('requestId')}")
         ai_response = await ai_client.generate_response(body)
+    except InvalidAIRequest as e:
+        logger.warning(f"AIRequest validation failed in client: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Schema Validation Error: {str(e)}"
+        )
     except RuntimeError as e:
         logger.error(f"Upstream error: {e}")
         raise HTTPException(status_code=502, detail=str(e))

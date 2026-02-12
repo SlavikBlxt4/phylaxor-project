@@ -4,6 +4,7 @@ import logging
 from typing import Dict, Any, Optional
 from openai import AsyncOpenAI, APIError
 from config import settings
+from schemas import validator
 
 logger = logging.getLogger("brain_gateway")
 
@@ -12,6 +13,9 @@ logger = logging.getLogger("brain_gateway")
 # Output: $0.60 / 1M tokens
 COST_PER_1M_INPUT_TOKENS = 0.15
 COST_PER_1M_OUTPUT_TOKENS = 0.60
+
+class InvalidAIRequest(Exception):
+    pass
 
 class OpenAIClient:
     def __init__(self):
@@ -40,6 +44,14 @@ class OpenAIClient:
         Also injects usage metadata.
         """
         start_time = time.time()
+        request_id = ai_request.get("meta", {}).get("requestId", "unknown")
+
+        # Pre-validate before calling OpenAI (defense-in-depth)
+        try:
+            validator.validate_request(ai_request)
+        except ValueError as e:
+            logger.warning(f"AIRequest pre-validation failed (request_id={request_id}): {e}")
+            raise InvalidAIRequest(str(e))
         
         # 1. Prepare messages
         user_content = json.dumps(ai_request)
@@ -74,6 +86,9 @@ class OpenAIClient:
             content_str = response.choices[0].message.content
             if not content_str:
                 raise ValueError("Empty response from OpenAI")
+
+            if settings.brain_debug_raw:
+                logger.info(f"OpenAI raw response (request_id={request_id}): {content_str}")
 
             try:
                 ai_response = json.loads(content_str)

@@ -156,6 +156,13 @@ Base backoff (in milliseconds) between retries.
 
 Max tokens requested in the AIResponse (passed via AIRequest `limits.maxOutputTokens`).
 
+#### `PHYLAXOR_BRAIN_DEBUG_RAW`
+- **Type**: Boolean
+- **Default**: `false`
+- **Required**: No
+
+When `true`, Brain Gateway logs the raw OpenAI response text (useful for debugging schema validation errors).
+
 ## Expected Behavior by Mode
 
 ### Mode: `none`

@@ -1,0 +1,95 @@
+{
+    "meta": {
+        "requestId": "8c3b0b5b-1b4f-4a7a-8a6a-4c0e3cfd9f0e",
+        "timestamp": "2026-02-12T15:10:00Z",
+        "schemaVersion": "1.0"
+    },
+    "alert": {
+        "fingerprint": "v1:payments:pay-api-7d8b9-x2z",
+        "alertname": "KubePodCrashLoopBackOff",
+        "status": "firing",
+        "startsAt": "2026-02-12T15:05:00Z",
+        "severity": "critical",
+        "labels": {
+            "namespace": "payments",
+            "pod": "pay-api-7d8b9-x2z",
+            "severity": "critical"
+        },
+        "annotations": {
+            "summary": "Pod pay-api-7d8b9-x2z is restarting frequently."
+        }
+    },
+    "context": {
+        "alertContext": {
+            "namespace": "payments",
+            "pod": "pay-api-7d8b9-x2z",
+            "podStatus": {
+                "phase": "Running",
+                "containerStatuses": [
+                    {
+                        "name": "api",
+                        "ready": false,
+                        "restartCount": 5,
+                        "state": {
+                            "waiting": "CrashLoopBackOff"
+                        }
+                    }
+                ]
+            },
+            "logs": "2026-02-12 15:04:50 INFO Starting payment-api v2.3\n2026-02-12 15:04:55 ERROR java.lang.OutOfMemoryError: Java heap space",
+            "events": [
+                {
+                    "type": "Warning",
+                    "reason": "BackOff",
+                    "message": "Back-off restarting failed container api",
+                    "count": 12
+                }
+            ],
+            "node": {
+                "name": "worker-02",
+                "conditions": [
+                    {
+                        "type": "Ready",
+                        "status": "True"
+                    }
+                ]
+            },
+            "storage": null,
+            "workload": {
+                "kind": "Deployment",
+                "name": "pay-api"
+            }
+        },
+        "cluster": {
+            "platform": "k8s",
+            "version": "v1.29.1",
+            "nodes": 3,
+            "nodeSummary": {
+                "ready": 3,
+                "notReady": 0
+            },
+            "defaultStorageClass": "standard"
+        }
+    },
+    "constraints": {
+        "readOnly": true,
+        "noSecrets": true,
+        "noDestructiveActions": true
+    },
+    "limits": {
+        "maxOutputTokens": 1024,
+        "logs": {
+            "maxChars": 5000,
+            "tailLines": 50,
+            "sinceSeconds": 300,
+            "dedupeRepeatedLines": true
+        },
+        "events": {
+            "maxItems": 20
+        }
+    },
+    "outputFormat": {
+        "type": "json",
+        "schemaVersion": "1.0"
+    }
+}
