@@ -163,6 +163,13 @@ Max tokens requested in the AIResponse (passed via AIRequest `limits.maxOutputTo
 
 When `true`, Brain Gateway logs the raw OpenAI response text (useful for debugging schema validation errors).
 
+#### `PHYLAXOR_BRAIN_DEBUG_MOCK`
+- **Type**: Boolean
+- **Default**: `false`
+- **Required**: No
+
+When `true`, Brain Gateway skips the OpenAI call and returns a deterministic mock response (for safe local/CI iteration).
+
 ## Expected Behavior by Mode
 
 ### Mode: `none`

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # Debug
     brain_debug_raw: bool = Field(False, env="PHYLAXOR_BRAIN_DEBUG_RAW")
+    brain_debug_mock: bool = Field(False, env="PHYLAXOR_BRAIN_DEBUG_MOCK")
 
     # Contracts
     contracts_dir: str = "/app/contracts"

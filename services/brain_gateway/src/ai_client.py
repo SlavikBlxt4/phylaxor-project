@@ -53,6 +53,22 @@ class OpenAIClient:
             logger.warning(f"AIRequest pre-validation failed (request_id={request_id}): {e}")
             raise InvalidAIRequest(str(e))
         
+        if settings.brain_debug_mock:
+            logger.info(f"Debug mock enabled (request_id={request_id}), skipping OpenAI call")
+            latency_ms = int((time.time() - start_time) * 1000)
+            ai_response = self._mock_response(ai_request)
+            ai_response["schemaVersion"] = "1.0"
+            ai_response["requestId"] = request_id
+            ai_response["provider"] = "debug"
+            ai_response["model"] = "debug-mock"
+            ai_response["usage"] = {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "estimatedCostUsd": 0,
+                "latencyMs": latency_ms
+            }
+            return ai_response
+
         # 1. Prepare messages
         user_content = json.dumps(ai_request)
         messages = [
@@ -117,5 +133,34 @@ class OpenAIClient:
         except Exception as e:
             logger.error(f"Unexpected error in AI client: {e}")
             raise
+
+    def _mock_response(self, ai_request: Dict[str, Any]) -> Dict[str, Any]:
+        alert = ai_request.get("alert", {})
+        alertname = alert.get("alertname", "UnknownAlert")
+        fingerprint = alert.get("fingerprint", "unknown")
+        namespace = (alert.get("labels") or {}).get("namespace")
+        ns_label = namespace if namespace else "unknown-namespace"
+
+        return {
+            "summary": f"[DEBUG MOCK] {alertname} ({fingerprint}) in {ns_label}.",
+            "triage": {
+                "severity": "info",
+                "confidence": 0.01,
+                "category": "debug"
+            },
+            "hypotheses": [],
+            "recommendedActions": [
+                "[DEBUG MOCK] This is a fake response. Disable PHYLAXOR_BRAIN_DEBUG_MOCK to call OpenAI."
+            ],
+            "checks": [],
+            "fixes": [],
+            "missingInfo": [],
+            "safety": {
+                "notes": [
+                    "Debug mode: no real AI call was made."
+                ]
+            },
+            "suggestedToolCalls": []
+        }
 
 ai_client = OpenAIClient()
