@@ -2,157 +2,190 @@
 
 ## Overview
 
-Phylaxor is a microservice-based incident-response assistant for Kubernetes/OpenShift that consumes alerts, enriches them with cluster context, applies knowledge-base rules, and notifies SRE teams. The goal is to reduce MTTR by providing actionable, context-aware troubleshooting steps.
+Phylaxor is a microservice-based incident-response assistant for Kubernetes and OpenShift.
 
-## Core Alert Processing Flow
+The platform combines three types of reasoning:
+- cluster context from the enricher
+- deterministic decisions from history and KB rules
+- AI-generated analysis via Brain Gateway when needed
 
+## Main Runtime Flow
+
+```text
+Alertmanager
+  -> ingest
+  -> Redis list: phylaxor_raw
+  -> enricher
+  -> Redis list: phylaxor_enriched
+  -> decision
+     -> Postgres
+     -> Brain Gateway
+     -> notifier
+     -> feedback-gateway
+     -> feedback UI
 ```
-┌─────────────────┐
-│  Alertmanager   │
-│   Webhook       │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────┐
-│  ingest                                                     │
-│  • Receives alert payload (HTTP POST)                       │
-│  • Normalizes to minimal event format                       │
-│  • Pushes to Redis                                          │
-└────────┬────────────────────────────────────────────────────┘
-         │
-         ▼
-┌──────────────────────┐
-│   Redis List         │
-│  phylaxor_raw        │
-└────────┬─────────────┘
-         │
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│  enricher                                                   │
-│  • Reads raw alert from Redis                               │
-│  • Attaches cluster context (nodes, storage, events)        │
-│  • Fetches logs (if enabled: none/loki/podlogs)            │
-│  • Pushes enriched event to Redis                           │
-│  • Degrades gracefully on RBAC failures                     │
-└────────┬─────────────────────────────────────────────────────┘
-         │
-         ▼
-┌──────────────────────┐
-│   Redis List         │
-│  phylaxor_enriched   │
-└────────┬─────────────┘
-         │
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│  decision                                                   │
-│  • Queries historical decisions (Postgres)                  │
-│  • Matches against KB rules (Postgres)                      │
-│  • Produces recommendation with confidence + reasoning      │
-│  • Pushes decision to Redis                                 │
-└────────┬─────────────────────────────────────────────────────┘
-         │
-         ├──────────────────────────────┬────────────────────────┐
-         ▼                              ▼                        ▼
-    ┌──────────┐              ┌─────────────────┐      ┌──────────────────┐
-    │ notifier │              │ Postgres        │      │ feedback-gateway │
-    │ (Telegram)              │ (decisions)     │      │ (Telegram client)│
-    └──────────┘              └─────────────────┘      └──────────────────┘
-         │                                                      │
-         └──────────────────────────────┬─────────────────────┘
-                                        ▼
-                             ┌─────────────────────────┐
-                             │ Postgres                │
-                             │ • decisions             │
-                             │ • feedback (votes)      │
-                             │ • kb_items/matchers     │
-                             │ • alerts                │
-                             └─────────────────────────┘
+
+## Detailed Flow
+
+```text
+Alertmanager
+  -> ingest
+     - validates and normalizes incoming alerts
+     - computes deterministic fingerprint
+     - pushes event to phylaxor_raw
+
+phylaxor_raw
+  -> enricher
+     - reads cluster and workload context
+     - fetches events
+     - fetches logs depending on mode:
+       - none
+       - loki
+       - podlogs
+     - degrades gracefully on RBAC failures
+     - pushes event to phylaxor_enriched
+
+phylaxor_enriched
+  -> decision
+     - checks history in Postgres
+     - checks KB rules in Postgres
+     - builds structured AIRequest when AI path is used
+     - calls Brain Gateway
+     - stores decision in Postgres
+     - sends notification payload to notifier
+
+notifier
+  -> Telegram
+
+feedback-gateway
+  -> Postgres feedback table
+
+feedback UI
+  -> reads alerts, decisions, KB, and feedback from Postgres
 ```
 
 ## Components
 
 ### ingest
-- **Purpose**: HTTP endpoint to receive alerts (typically from Alertmanager)
-- **Input**: Alert payload (JSON)
-- **Output**: Normalized event pushed to `phylaxor_raw` Redis list
-- **Permissions**: None (HTTP-only, no kube/log access needed)
+
+Responsibility:
+- accept Alertmanager-style payloads
+- normalize shape
+- compute fingerprints
+- queue raw events
+
+Key dependencies:
+- Redis
 
 ### enricher
-- **Purpose**: Enrich raw alerts with cluster context
-- **Input**: Raw event from Redis
-- **Output**: Enriched event to `phylaxor_enriched` Redis list
-- **Context added**:
-  - Cluster metadata (version, nodes, storage)
-  - Pod/node/resource status
-  - Recent cluster events
-  - Pod logs (when enabled via `PHYLAXOR_LOGS_MODE`)
-- **Permissions**: Observer + conditional log read access (see docs/SECURITY_MODEL.md)
-- **Resilience**: Degrades gracefully on RBAC 403 errors; pipeline does not fail
+
+Responsibility:
+- attach cluster-wide and workload-specific context
+- fetch recent events
+- fetch logs according to `PHYLAXOR_LOGS_MODE`
+
+Key dependencies:
+- Redis
+- Kubernetes API
+- optional Loki endpoint in future
+
+Important behavior:
+- `pods/log` access is optional and mode-dependent
+- RBAC denials must log warnings and continue
 
 ### decision
-- **Purpose**: Generate recommendations based on history and KB
-- **Input**: Enriched event from Redis
-- **Process**:
-  1. Look up historical decisions (via alert fingerprint in Postgres)
-  2. Match KB rules (matchers + metadata) in Postgres
-  3. Fallback recommendation if no KB match
-- **Output**: Decision record (KB path / history / fallback) to Postgres + Redis
-- **Permissions**: Read-only to Postgres decision/KB tables
+
+Responsibility:
+- rank possible decision sources
+- use history and KB first
+- call Brain Gateway for structured AI analysis when applicable
+- persist the selected decision
+
+Key dependencies:
+- Redis
+- Postgres
+- Brain Gateway
+- notifier service
+
+Decision sources:
+- history
+- KB
+- AI
+- fallback when AI is unavailable
+
+### brain_gateway
+
+Responsibility:
+- validate AIRequest against schema
+- call OpenAI
+- normalize output
+- validate AIResponse against schema before returning it
+
+Key dependencies:
+- OpenAI API
+- JSON schemas from `docs/contracts`
 
 ### notifier
-- **Purpose**: Send notification to on-call team (Telegram)
-- **Input**: Decision from Redis
-- **Output**: Telegram message with interactive buttons
-- **Important**: Must **NOT** have Kubernetes or logging permissions
-- **Permissions**: None (external API call only)
+
+Responsibility:
+- send the final recommendation to Telegram
+- attach feedback buttons when a `decision_id` exists
+
+Key constraint:
+- no Kubernetes permissions
 
 ### feedback-gateway
-- **Purpose**: Handle Telegram callback responses and record feedback
-- **Input**: Telegram callback webhooks
-- **Output**: Vote record to Postgres `feedback` table
-- **Permissions**: Write to Postgres feedback table only
 
-## Key Architectural Decisions
+Responsibility:
+- receive Telegram callbacks
+- store operator feedback in Postgres
 
-### 1. Redis as Event Queue
-- Redis lists (`phylaxor_raw`, `phylaxor_enriched`) decouple components
-- Allows independent scaling and restart without event loss
-- Simple, reliable for MVP stage
+### feedback
 
-### 2. Configurable Logging Modes
-See `docs/CONTRACT_ENV.md` and `docs/LOGGING_MODES.md` for details.
+Responsibility:
+- expose a lightweight dashboard
+- browse alerts, decisions, KB items, matchers, and feedback
 
-- **`none`**: No log access (safest, no risk of leaking sensitive data)
-- **`loki`**: Centralized logging backend (recommended for enterprise)
-- **`podlogs`**: Direct Kubernetes API log read (requires explicit enable + RBAC grant)
+## Data Stores
 
-### 3. Graceful Degradation
-RBAC 403 errors (e.g., pod/logs not permitted) trigger a warning log but do **NOT** break the pipeline. Enricher continues with available context.
+Redis:
+- `phylaxor_raw`
+- `phylaxor_enriched`
 
-### 4. Separation of Duties
-- Components reading cluster data have no outbound Internet access
-- Notifier (Telegram/Internet) has no Kubernetes permissions
-- Reduces blast radius if a component is compromised
+Postgres:
+- `alerts`
+- `decisions`
+- `feedback`
+- `kb_items`
+- `kb_matchers`
 
-### 5. Postgres as Source of Truth
-- KB rules, historical decisions, and feedback stored in Postgres
-- Redis is ephemeral (events only)
-- Enables decision history analysis and rule refinement
+## Architectural Principles
 
-## Database Schema (Simplified)
+### Queue-Based Decoupling
 
-| Table | Purpose |
-|-------|---------|
-| `kb_items` | Knowledge base entries: checks, fixes, severity, tags |
-| `kb_matchers` | Rules linking kb_items to alert patterns (alertname, namespace, labels, regex) |
-| `alerts` | Alert instances: fingerprint, alertname, labels, timestamps |
-| `decisions` | Recommendations: path (history/kb/fallback), kb_id, confidence, reason |
-| `feedback` | User votes on decisions: decision_id FK, vote (bool), notes |
+Redis decouples ingest, enrich, and decision stages so they can fail and restart independently.
 
-## Related Documentation
+### Explicit Logging Modes
 
-- **`docs/PROJECT_CONTEXT.md`** — Global project context (canonical reference)
-- **`docs/CONTRACT_ENV.md`** — Environment variable contract (logging modes, feature flags)
-- **`docs/SECURITY_MODEL.md`** — Security boundaries and RBAC principles
-- **`docs/LOGGING_MODES.md`** — Deep dive into logging modes (risks, use cases, enterprise recommendations)
-- **`docs/TEST_MATRIX.md`** — E2E test scenarios for each logging mode
+The enricher must not assume log access. Log retrieval is a runtime choice and a security choice.
+
+### AI Behind A Contract Boundary
+
+The decision service does not call the model directly. It talks to Brain Gateway through a strict schema contract.
+
+### Graceful Degradation
+
+Missing logs, RBAC denials, or AI unavailability should reduce context quality, not stop the pipeline.
+
+### Separation Of Duties
+
+Cluster-aware services and Internet-facing services remain separated on purpose.
+
+## Related Documents
+
+- `PROJECT_CONTEXT.md`
+- `CONTRACT_ENV.md`
+- `SECURITY_MODEL.md`
+- `LOGGING_MODES.md`
+- `TEST_MATRIX.md`
+- `ai_interaction_contract.md`

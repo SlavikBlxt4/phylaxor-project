@@ -1,167 +1,89 @@
 # Phylaxor — Application Code
 
-This is the application code repository for Phylaxor microservices.
+This repository contains the application services for Phylaxor.
 
-For deployment (Helm charts, RBAC, ArgoCD apps), see `phylaxor-gitops/`.
+Phylaxor is an incident-response assistant for Kubernetes/OpenShift:
+- ingest receives Alertmanager payloads
+- enricher adds cluster context and optional logs
+- decision combines history, KB, and AI analysis
+- notifier sends the result to Telegram
+- feedback services capture operator feedback
 
-## Project Structure
+For Helm charts and cluster deployment, see `../phylaxor-gitops`.
 
-```
+## Start Here
+
+If you are new to the project, read these files in order:
+
+1. `docs/README.md`
+2. `docs/PROJECT_CONTEXT.md`
+3. `docs/ARCHITECTURE.md`
+4. `docs/CONTRACT_ENV.md`
+5. `docs/SECURITY_MODEL.md`
+
+That path gives enough context to understand the system before diving into service code.
+
+## Current State
+
+What is already implemented in this repo:
+- ingest -> enricher -> decision -> notifier pipeline
+- feedback gateway and feedback dashboard
+- logging modes with provider pattern in the enricher
+- Brain Gateway integration for AI-generated recommendations
+- decision ranking across history, KB, and AI/fallback paths
+
+What is still incomplete or future-facing:
+- Loki provider implementation
+- end-to-end hardening of the AI path in cluster deployments
+- operational cleanup and documentation consolidation
+
+## Repository Structure
+
+```text
 phylaxor-project/
-  ├── ARCHITECTURE.md              # Component architecture and data flow
-  ├── docs/
-  │   ├── PROJECT_CONTEXT.md       # Global project context (canonical reference)
-  │   ├── CONTRACT_ENV.md          # Environment variable contract
-  │   ├── SECURITY_MODEL.md        # RBAC and security boundaries
-  │   ├── LOGGING_MODES.md         # Logging mode analysis (none/loki/podlogs)
-  │   └── TEST_MATRIX.md           # E2E test scenarios and acceptance criteria
-  ├── .github/
-  │   └── copilot-instructions.md  # AI agent instructions and non-negotiables
-  ├── services/
-  │   ├── ingest/                  # Alert ingestion (HTTP)
-  │   ├── enricher/                # Alert enrichment with cluster context
-  │   ├── decision/                # Recommendation engine (KB + history)
-  │   ├── notifier/                # Telegram notification
-  │   ├── feedback/                # Feedback dashboard
-  │   ├── feedback_gateway/        # Telegram callback handler
-  │   └── postgres/                # Database initialization
-  ├── infra/
-  │   └── postgres/
-  │       └── init.sql             # Database schema
-  └── docker-compose.yml           # Local development setup
+  docs/                       Core technical documentation
+  infra/postgres/init.sql     Database schema bootstrap
+  services/
+    ingest/                   Alert ingestion
+    enricher/                 Context enrichment and logs provider
+    decision/                 Decision selection and Brain Gateway client
+    brain_gateway/            OpenAI-facing structured response service
+    notifier/                 Telegram sender
+    feedback_gateway/         Telegram callback handler
+    feedback/                 Dashboard and feedback API
+  docker-compose.yml          Local development stack
 ```
 
-## Global Context & Contract
-
-**Before writing or modifying code, read these documents:**
-
-1. **`ARCHITECTURE.md`** — How components communicate (Redis queues, Postgres storage)
-2. **`docs/PROJECT_CONTEXT.md`** — Project goals, current state, immediate next steps
-3. **`docs/CONTRACT_ENV.md`** — Environment variable contract (logging modes, feature flags, defaults)
-4. **`docs/SECURITY_MODEL.md`** — RBAC requirements, non-negotiables, separation of duties
-5. **`docs/LOGGING_MODES.md`** — Why we have `none`/`loki`/`podlogs` modes and when to use each
-6. **`.github/copilot-instructions.md`** — Copilot instructions and coding guidelines
-
-## Quick Start
-
-### Local Development (Docker Compose)
+## Local Development
 
 ```bash
-# Start services (ingest, enricher, decision, notifier, postgres, redis)
+cd phylaxor-project
 docker-compose up -d
-
-# Check logs
 docker-compose logs -f enricher
+```
 
-# Stop
+Send a test alert:
+
+```bash
+curl -X POST http://localhost:8080/alert \
+  -H "Content-Type: application/json" \
+  -d '{"alerts":[{"status":"firing","labels":{"alertname":"TestAlert","severity":"warning"},"annotations":{"summary":"Test alert"}}]}'
+```
+
+Stop everything:
+
+```bash
 docker-compose down
 ```
 
-### Configuration
+## Documentation Rules
 
-Set environment variables (see `docs/CONTRACT_ENV.md`):
+When behavior changes:
+- update `docs/PROJECT_CONTEXT.md` if project state changed
+- update `docs/CONTRACT_ENV.md` before adding new env vars
+- update `docs/ARCHITECTURE.md` if the service flow changed
+- keep GitOps docs aligned when deployment behavior changes
 
-```bash
-# Logging mode (default: none = safest)
-export PHYLAXOR_LOGS_MODE=none
+## Related Repositories
 
-# Enable cluster events enrichment
-export PHYLAXOR_EVENTS_ENABLED=true
-
-# Log limits
-export PHYLAXOR_LOGS_MAX_LINES=500
-export PHYLAXOR_LOGS_MAX_BYTES=100000
-export PHYLAXOR_LOGS_LOOKBACK=300
-```
-
-### Send a Test Alert
-
-```bash
-curl -X POST http://localhost:5000/webhook \
-  -H "Content-Type: application/json" \
-  -d '{
-    "alerts": [{
-      "status": "firing",
-      "labels": {
-        "alertname": "TestAlert",
-        "severity": "warning"
-      },
-      "annotations": {
-        "summary": "Test alert for Phylaxor"
-      }
-    }]
-  }'
-```
-
-## Security Posture
-
-### Non-Negotiables
-- ✅ **No Secrets by default** — Do not read Kubernetes Secrets
-- ✅ **Explicit log access** — Logs are opt-in; default mode is `none`
-- ✅ **Graceful degradation** — RBAC 403 errors do not break the pipeline
-- ✅ **Separation of duties** — Notifier has NO Kubernetes permissions
-- ✅ **Minimum RBAC** — Every component gets only what it needs
-
-See `docs/SECURITY_MODEL.md` for detailed RBAC requirements.
-
-## Testing
-
-### E2E Test Scenarios
-
-See `docs/TEST_MATRIX.md` for full acceptance criteria.
-
-**Quick tests**:
-
-```bash
-# Test 1: mode=none (no logs)
-PHYLAXOR_LOGS_MODE=none docker-compose up -d
-# Send alert, verify enriched event in Redis
-
-# Test 2: mode=podlogs + RBAC 403 (OpenShift CRC)
-# Deploy on CRC without pods/log RBAC
-# Send alert, verify WARN in logs (graceful degradation)
-```
-
-## Development Guidelines
-
-See **`.github/copilot-instructions.md`** for detailed guidelines:
-
-- ✅ Test all logging modes before merging
-- ✅ Update `docs/CONTRACT_ENV.md` before adding new env vars
-- ✅ Handle RBAC 403 gracefully (warn + continue, never crash)
-- ✅ Keep commits small and focused
-
-## Deployment
-
-See `phylaxor-gitops/` for Helm charts and deployment instructions.
-
-### Deploy on Minikube
-
-```bash
-cd ../phylaxor-gitops
-helm install phylaxor ./apps/phylaxor -f apps/phylaxor/values-minikube.yaml
-```
-
-### Deploy on OpenShift CRC
-
-```bash
-helm install phylaxor ./apps/phylaxor -f apps/phylaxor/values-openshift.yaml
-```
-
-## Next Steps
-
-1. ✅ Configuration contract defined (env vars, defaults)
-2. ⏳ Update enricher to respect `PHYLAXOR_LOGS_MODE`
-3. ⏳ Add Loki provider and test on CRC
-4. ⏳ Add E2E tests for all 3 modes
-
-## References
-
-- **`PHYLAXOR_CONTEXT.md`** (workspace root) — Original project brief
-- **`phylaxor-gitops/`** — Helm charts, RBAC templates, ArgoCD apps
-- **`docs/TEST_MATRIX.md`** — Acceptance criteria for all modes
-
----
-
-**Last Updated**: December 2025  
-**Contact**: SlavikBlxt4 (GitHub)
+- `phylaxor-gitops/`: Helm charts, RBAC, deployment values
