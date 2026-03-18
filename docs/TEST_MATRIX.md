@@ -8,9 +8,11 @@ Already validated:
 - core flow `alert -> ingest -> enricher -> decision -> brain-gateway -> notifier -> Telegram`
 - persistence of AI-backed decisions in `decisions`
 - persistence of AI request metadata in `ai_usage`
+- real alert delivery through OpenShift Alertmanager using a synthetic `PrometheusRule`
 
 Reference script:
 - `phylaxor-gitops/e2e_brain_gateway.sh`
+- `phylaxor-gitops/e2e_alertmanager_openshift.sh`
 
 ## Test Environments
 

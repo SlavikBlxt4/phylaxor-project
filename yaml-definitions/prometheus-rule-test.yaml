@@ -1,22 +1,20 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  annotations:
-    prometheus-operator-validated: 'true'
+  name: phylaxor-test-alert
+  namespace: phylaxor
   labels:
-    release: monitoring
-  name: phylaxor-test-2
-  namespace: monitoring
+    openshift.io/prometheus-rule-evaluation-scope: leaf-prometheus
 spec:
   groups:
-    - name: phylaxor-test.rules
-      rules:
-        - alert: PhylaxorTestAlert2
-          annotations:
-            description: This is a test alert for validating the webhook flow.
-            summary: Phylaxor test alert
-          expr: vector(1)
-          for: 10s
-          labels:
-            namespace: monitoring
-            severity: info
+  - name: phylaxor-test.rules
+    rules:
+    - alert: PhylaxorRealPipelineTest
+      expr: vector(1)
+      for: 15s
+      labels:
+        severity: info
+        namespace: phylaxor
+      annotations:
+        summary: "Phylaxor real pipeline test"
+        description: "Synthetic alert to validate OpenShift Alertmanager -> Phylaxor"

@@ -38,6 +38,7 @@ Stable and implemented:
 - Telegram notification with feedback buttons
 - Helm deployment for Minikube and OpenShift
 - validated end-to-end flow from alert ingestion to AI-backed Telegram notification
+- validated end-to-end flow from real OpenShift Alertmanager delivery to AI-backed Telegram notification
 
 Partially implemented or still pending:
 - real Loki provider behavior
