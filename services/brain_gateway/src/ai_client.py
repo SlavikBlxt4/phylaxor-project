@@ -204,6 +204,26 @@ class OpenAIClient:
         if not isinstance(tool_calls, list):
             tool_calls = []
 
+        # Normalize suggestedToolCalls so schemas continue to validate even if the model returns
+        # a list of strings (common when it suggests a single command like `kubectl ...`).
+        normalized_tool_calls = []
+        for item in tool_calls:
+            if isinstance(item, str) and item.strip():
+                normalized_tool_calls.append({
+                    "tool": "shell",
+                    "args": {"cmd": item.strip()},
+                    "reason": "LLM suggested a raw command"
+                })
+            elif isinstance(item, dict):
+                tool = item.get("tool") if isinstance(item.get("tool"), str) else "shell"
+                args = item.get("args") if isinstance(item.get("args"), dict) else {}
+                reason = item.get("reason") if isinstance(item.get("reason"), str) else "LLM suggested a tool call"
+                normalized_tool_calls.append({
+                    "tool": tool,
+                    "args": args,
+                    "reason": reason,
+                })
+        
         normalized = {
             "summary": summary.strip() or "No summary provided by model",
             "triage": {
@@ -217,7 +237,7 @@ class OpenAIClient:
             "fixes": self._normalize_fixes(payload.get("fixes", [])),
             "missingInfo": missing_info,
             "safety": safety,
-            "suggestedToolCalls": tool_calls,
+            "suggestedToolCalls": normalized_tool_calls,
         }
         return normalized
 
