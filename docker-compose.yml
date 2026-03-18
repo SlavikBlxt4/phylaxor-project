@@ -45,4 +45,15 @@ services:
       REDIS_HOST: redis
       PG_DSN: postgresql://postgres:postgres@postgres:5432/phylaxor
       NOTIFIER_URL: http://notifier:8082/send
-    depends_on: [redis, postgres, notifier]
+      BRAIN_GATEWAY_URL: http://brain_gateway:8000
+    depends_on: [redis, postgres, notifier, brain_gateway]
+
+  brain_gateway:
+    build: ./services/brain_gateway
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      PHYLAXOR_BRAIN_DEBUG_RAW: ${PHYLAXOR_BRAIN_DEBUG_RAW:-false}
+      PHYLAXOR_BRAIN_DEBUG_MOCK: ${PHYLAXOR_BRAIN_DEBUG_MOCK:-false}
+    ports: ["8000:8000"]
+    volumes:
+      - ./docs/contracts:/app/contracts:ro

@@ -13,7 +13,7 @@ PG_DSN       = os.getenv("PG_DSN","dbname=phylaxor user=postgres password=postgr
 NOTIFIER_URL = os.getenv("NOTIFIER_URL","http://notifier:8082/send")
 
 # Brain Gateway config
-BRAIN_GATEWAY_URL = os.getenv("BRAIN_GATEWAY_URL", "http://brain-gateway:8080")
+BRAIN_GATEWAY_URL = os.getenv("BRAIN_GATEWAY_URL", "http://brain-gateway:8000")
 BRAIN_GATEWAY_TIMEOUT_SECONDS = float(os.getenv("BRAIN_GATEWAY_TIMEOUT_SECONDS", "20"))
 BRAIN_GATEWAY_MAX_RETRIES = int(os.getenv("BRAIN_GATEWAY_MAX_RETRIES", "2"))
 BRAIN_GATEWAY_RETRY_BACKOFF_MS = int(os.getenv("BRAIN_GATEWAY_RETRY_BACKOFF_MS", "250"))
