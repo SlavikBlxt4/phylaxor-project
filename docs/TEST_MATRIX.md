@@ -2,6 +2,16 @@
 
 This document defines acceptance criteria for end-to-end testing of Phylaxor across all logging modes and environments.
 
+## Current Validation Status
+
+Already validated:
+- core flow `alert -> ingest -> enricher -> decision -> brain-gateway -> notifier -> Telegram`
+- persistence of AI-backed decisions in `decisions`
+- persistence of AI request metadata in `ai_usage`
+
+Reference script:
+- `phylaxor-gitops/e2e_brain_gateway.sh`
+
 ## Test Environments
 
 | Environment | PHYLAXOR_LOGS_MODE | Use Case |

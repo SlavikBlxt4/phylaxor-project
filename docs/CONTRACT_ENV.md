@@ -123,7 +123,7 @@ These variables control how the **decision** service calls the Brain Gateway (`P
 
 #### `BRAIN_GATEWAY_URL`
 - **Type**: String (URL)
-- **Default**: `http://brain-gateway:8080`
+- **Default**: `http://brain-gateway:8000`
 - **Required**: No
 
 Base URL for Brain Gateway. The decision service appends `/v1/brain/complete`.

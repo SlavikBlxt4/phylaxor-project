@@ -37,10 +37,10 @@ Stable and implemented:
 - AI path via Brain Gateway
 - Telegram notification with feedback buttons
 - Helm deployment for Minikube and OpenShift
+- validated end-to-end flow from alert ingestion to AI-backed Telegram notification
 
 Partially implemented or still pending:
 - real Loki provider behavior
-- full operational validation of the AI path in cluster deployments
 - network isolation and other hardening extras
 
 ## Main Repositories
@@ -88,7 +88,7 @@ OpenShift remains the main security reference environment.
 
 The documentation and code suggest the next meaningful priorities are:
 
-1. keep the AI/Brain Gateway path documented and operationally verified
+1. keep the AI/Brain Gateway path documented and repeatably validated
 2. implement the Loki provider behind `PHYLAXOR_LOGS_MODE=loki`
 3. keep deployment docs aligned with actual behavior
 4. continue hardening for OpenShift-style operation

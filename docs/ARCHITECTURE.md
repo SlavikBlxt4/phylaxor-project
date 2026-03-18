@@ -64,6 +64,8 @@ feedback UI
   -> reads alerts, decisions, KB, and feedback from Postgres
 ```
 
+This end-to-end path is already validated for the AI flow through Brain Gateway and Telegram delivery.
+
 ## Components
 
 ### ingest
@@ -158,6 +160,7 @@ Postgres:
 - `feedback`
 - `kb_items`
 - `kb_matchers`
+- `ai_usage`
 
 ## Architectural Principles
 
