@@ -3,8 +3,6 @@ kind: PrometheusRule
 metadata:
   name: phylaxor-test-alert
   namespace: phylaxor
-  labels:
-    openshift.io/prometheus-rule-evaluation-scope: leaf-prometheus
 spec:
   groups:
   - name: phylaxor-test.rules
