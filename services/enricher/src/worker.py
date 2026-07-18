@@ -4,6 +4,7 @@ import time
 import signal
 import sys
 import traceback
+import re
 import redis
 from log_provider import get_log_provider
 
@@ -26,6 +27,16 @@ LOG_PROVIDER = None
 
 # Redis client
 r = redis.Redis(host=RHOST, port=RPORT, db=REDIS_DB)
+
+RUN_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+
+
+def validated_run_id(labels):
+    """Return a safe E2E correlation id without reflecting invalid input to logs."""
+    run_id = (labels or {}).get("phylaxor_run_id")
+    if run_id is None:
+        return "none"
+    return run_id if isinstance(run_id, str) and RUN_ID_RE.fullmatch(run_id) else "invalid"
 
 
 # ===============================
@@ -359,9 +370,11 @@ def main():
         try:
             evt = json.loads(payload)
             labels = evt.get("labels") or {}
+            run_id = validated_run_id(labels)
             print(
                 f"[enricher] received alert alertname={evt.get('alertname')} "
-                f"fingerprint={evt.get('fingerprint')} namespace={labels.get('namespace')}",
+                f"fingerprint={evt.get('fingerprint')} namespace={labels.get('namespace')} "
+                f"run_id={run_id}",
                 flush=True
             )
 
@@ -375,7 +388,7 @@ def main():
             r.lpush("phylaxor_enriched", json.dumps(evt))
             print(
                 f"[enricher] enriched alert fingerprint={evt.get('fingerprint')} "
-                "pushed=phylaxor_enriched",
+                f"run_id={run_id} pushed=phylaxor_enriched",
                 flush=True
             )
         except Exception as e:

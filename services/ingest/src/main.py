@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-import os, json, redis, time, logging
+import os, json, redis, time, logging, re
 # Try specific import for different run contexts
 try:
     from fingerprint import calculate_fingerprint
@@ -13,6 +13,16 @@ r = redis.Redis(host=os.getenv("REDIS_HOST","redis"), port=6379, db=0)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ingest")
 
+RUN_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+
+
+def validated_run_id(labels):
+    """Return a safe E2E correlation id without reflecting invalid input to logs."""
+    run_id = (labels or {}).get("phylaxor_run_id")
+    if run_id is None:
+        return "none"
+    return run_id if isinstance(run_id, str) and RUN_ID_RE.fullmatch(run_id) else "invalid"
+
 @app.post("/alert")
 async def alert(req: Request):
     payload = await req.json()
@@ -20,6 +30,14 @@ async def alert(req: Request):
     logger.info(f"[ingest] received alerts count={len(alerts)}")
 
     for a in alerts:
+        labels = dict(a.get("labels", {}) or {})
+        run_id = validated_run_id(labels)
+        if run_id == "invalid":
+            labels.pop("phylaxor_run_id", None)
+        logger.info(
+            f"[ingest] received alert alertname={labels.get('alertname')} "
+            f"run_id={run_id}"
+        )
         # Calculate deterministic fingerprint v1
         fp, explanation = calculate_fingerprint(a)
         
@@ -34,8 +52,8 @@ async def alert(req: Request):
         evt = {
             "fingerprint": fp,
             "fingerprint_explanation": explanation,
-            "alertname": a.get("labels", {}).get("alertname"),
-            "labels": a.get("labels", {}),
+            "alertname": labels.get("alertname"),
+            "labels": labels,
             "annotations": a.get("annotations", {}),
             "startsAt": a.get("startsAt"),
             "status": a.get("status", "firing")
@@ -43,7 +61,8 @@ async def alert(req: Request):
         r.lpush("phylaxor_raw", json.dumps(evt))
         logger.info(
             f"[ingest] queued alert alertname={evt.get('alertname')} "
-            f"fingerprint={evt.get('fingerprint')} status={evt.get('status')}"
+            f"fingerprint={evt.get('fingerprint')} status={evt.get('status')} "
+            f"run_id={run_id}"
         )
 
     print(f"[ingest] queued alerts count={len(alerts)} to phylaxor_raw", flush=True)

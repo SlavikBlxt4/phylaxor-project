@@ -10,6 +10,15 @@ Already validated:
 - persistence of AI request metadata in `ai_usage`
 - real alert delivery through OpenShift Alertmanager using a synthetic `PrometheusRule`
 
+The strengthened OpenShift acceptance contract requires each run to carry a unique
+`phylaxor_run_id`, use a real pod-backed metric, create alert and decision rows newer
+than the run baseline, persist non-null `podStatus`, select `path=ai`, correlate the
+same alert/decision/request tuple in `ai_usage`, and complete a real Telegram send.
+An old database row, empty pod context, fallback path, or notifier dry-run is a failure.
+
+This contract proves direct Pod enrichment only. Workload, Node, PVC, namespace-only,
+and cluster target resolution remain Phase 2 work.
+
 Reference script:
 - `phylaxor-gitops/e2e_brain_gateway.sh`
 - `phylaxor-gitops/e2e_alertmanager_openshift.sh`
