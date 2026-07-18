@@ -10,11 +10,11 @@ spec:
   - name: phylaxor-test.rules
     rules:
     - alert: PhylaxorRealPipelineTest
-      expr: vector(1)
+      expr: max by (namespace, pod) (kube_pod_status_phase{namespace="__TARGET_NAMESPACE__",pod="__TARGET_POD__",phase="Running"} == 1)
       for: 15s
       labels:
         severity: info
-        namespace: phylaxor
+        phylaxor_run_id: __RUN_ID__
       annotations:
         summary: "Phylaxor real pipeline test"
-        description: "Synthetic alert to validate OpenShift Alertmanager -> Phylaxor"
+        description: "Resource-backed alert to validate OpenShift Alertmanager -> Phylaxor"
