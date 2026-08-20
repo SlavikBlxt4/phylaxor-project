@@ -7,7 +7,7 @@ on:
       - "services/**/src/**"
       - "services/**/Dockerfile"
       - "services/**/requirements.txt"
-      - ".github/workflows/build-and-update-gitops.yml"
+      - ".github/workflows/build-and-update-gitops.yaml"
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_PAT }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build & push images
       run: |
